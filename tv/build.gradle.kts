@@ -1,5 +1,7 @@
 import java.util.Properties
 import java.io.FileInputStream
+import com.android.build.gradle.AppExtension
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 
 plugins {
     id("com.android.application")
@@ -67,7 +69,7 @@ val listenTogetherServer: String = (
  * comes. Blanking this line is the one step that turns a beta into a release,
  * so it is the one place to get right.
  */
-val betaSuffix = ""
+val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
 android {
     namespace = "com.music.bitchord"
@@ -82,8 +84,8 @@ android {
         // Haze falls back to a translucent scrim below that.
         minSdk = 26
         targetSdk = 36
-        versionCode = 39
-        versionName = "1.9.1"
+        versionCode = rootProject.extra["bitchordVersionCode"] as Int
+        versionName = rootProject.extra["bitchordVersionName"] as String
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -168,7 +170,7 @@ android {
         // exactly the failure the unsigned fallback above exists to avoid, so
         // the keystore has to be looked for rather than assumed.
         val store = signing.getProperty("storeFile")?.let { rootProject.file(it) }
-        if (store != null && store.exists()) {
+        if (store != null && store.exists() && store.length() > 0L && !signing.getProperty("storePassword").isNullOrBlank()) {
             create("release") {
                 storeFile = store
                 storePassword = signing.getProperty("storePassword")
@@ -207,7 +209,9 @@ android {
             )
             // Null without a keystore to sign with: fallback to debug signing
             // so the release build is fully R8 optimized and directly installable.
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+                ?: if (providers.gradleProperty("bitchord.strictSigning").orNull == "true") null
+                   else signingConfigs.getByName("debug")
         }
         /*
          * The release build, installable next to the dev and prod apps: same R8,
@@ -247,6 +251,27 @@ android {
             // so a test of that layer fails on the logging rather than on the
             // logic it was written to check.
             isReturnDefaultValues = true
+        }
+    }
+}
+
+// Rename prod release APK outputs to match AppUpdateChecker contract:
+// BitChordTV-<tag>.apk for universal and BitChordTV-<tag>_<abi>.apk for splits.
+configure<AppExtension> {
+    applicationVariants.all {
+        if (buildType.name == "release" && flavorName == "prod") {
+            val rawVersion = (rootProject.extra["bitchordVersionName"] as String).removePrefix("v")
+            outputs.all {
+                val outputImpl = this as? BaseVariantOutputImpl
+                val abi = outputImpl?.getFilter("ABI")
+                if (outputImpl != null) {
+                    outputImpl.outputFileName = if (abi.isNullOrEmpty()) {
+                        "BitChordTV-v$rawVersion.apk"
+                    } else {
+                        "BitChordTV-v${rawVersion}_$abi.apk"
+                    }
+                }
+            }
         }
     }
 }

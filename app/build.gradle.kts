@@ -1,6 +1,8 @@
 import java.util.Properties
 import java.security.MessageDigest
 import java.io.FileInputStream
+import com.android.build.gradle.AppExtension
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 
 plugins {
     id("com.android.application")
@@ -150,7 +152,7 @@ android {
         // exactly the failure the unsigned fallback above exists to avoid, so
         // the keystore has to be looked for rather than assumed.
         val store = signing.getProperty("storeFile")?.let { rootProject.file(it) }
-        if (store != null && store.exists()) {
+        if (store != null && store.exists() && store.length() > 0L && !signing.getProperty("storePassword").isNullOrBlank()) {
             create("release") {
                 storeFile = store
                 storePassword = signing.getProperty("storePassword")
@@ -231,6 +233,27 @@ android {
             // so a test of that layer fails on the logging rather than on the
             // logic it was written to check.
             isReturnDefaultValues = true
+        }
+    }
+}
+
+// Rename prod release APK outputs to match AppUpdateChecker contract:
+// BitChord-<tag>.apk for universal and BitChord-<tag>_<abi>.apk for splits.
+configure<AppExtension> {
+    applicationVariants.all {
+        if (buildType.name == "release" && flavorName == "prod") {
+            val rawVersion = (rootProject.extra["bitchordVersionName"] as String).removePrefix("v")
+            outputs.all {
+                val outputImpl = this as? BaseVariantOutputImpl
+                val abi = outputImpl?.getFilter("ABI")
+                if (outputImpl != null) {
+                    outputImpl.outputFileName = if (abi.isNullOrEmpty()) {
+                        "BitChord-v$rawVersion.apk"
+                    } else {
+                        "BitChord-v${rawVersion}_$abi.apk"
+                    }
+                }
+            }
         }
     }
 }

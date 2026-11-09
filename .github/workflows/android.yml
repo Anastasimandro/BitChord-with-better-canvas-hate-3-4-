@@ -1,56 +1,367 @@
 name: Android Release APK
 
+# Pipeline to build and publish signed APKs:
+# 1. Pushing to 'main' triggers 'build-prod-release' which only compiles and
+#    uploads CI artifacts (no GitHub Release is created).
+# 2. Pushing a tag 'v*' (e.g. 'v1.9.2') triggers 'release-phone-and-wear' and
+#    'release-tv' which compile signed release APKs, verify signatures, ensure
+#    exact naming required by the in-app updater (AppUpdateChecker), and publish
+#    or attach them to the official GitHub Release.
+# 3. Dry-run / Manual Testing via workflow_dispatch:
+#    - You can trigger this manually under the Actions tab.
+#    - If 'publish_release' is set to false, it runs the full release build and
+#      verification, uploading artifacts without publishing a GitHub Release.
+#    - Specify 'tag' (e.g. 'v1.9.1') if running workflow_dispatch against a branch
+#      so the consistency check matches the root build.gradle.kts bitchordVersionName.
+
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag/version override (e.g. v1.9.2). Defaults to git ref_name if empty.'
+        required: false
+        default: ''
+      publish_release:
+        description: 'Publish as a GitHub Release (set false to only build & upload workflow artifacts)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
 
 jobs:
+  # CI artifact build for pushes to main (never creates a release)
   build-prod-release:
+    name: Build Main Prod Artifacts
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Setup Secrets (Keystore & local.properties)
-      run: |
-        echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
-        echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
-        echo "LISTEN_TOGETHER_SERVER=${{ secrets.LISTEN_TOGETHER_SERVER }}" >> local.properties
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
-        {
-          echo "storeFile=bitchord-release.jks"
-          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}"
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}"
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
-        } > keystore.properties
+      - name: Setup Secrets (Keystore & local.properties)
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          echo "LISTEN_TOGETHER_SERVER=${{ secrets.LISTEN_TOGETHER_SERVER }}" >> local.properties
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
+            if [ -s bitchord-release.jks ]; then
+              {
+                echo "storeFile=bitchord-release.jks"
+                echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}"
+                echo "keyAlias=${{ secrets.KEY_ALIAS }}"
+                echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+              } > keystore.properties
+            fi
+          fi
 
-    - name: Build Signed Prod Release APK
-      run: ./gradlew assembleProdRelease
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: bitchord-prod-release-signed
-        path: app/build/outputs/apk/prod/release/*.apk
+      - name: Build Signed Prod Release APK
+        run: ./gradlew assembleProdRelease
 
-    # Built by the same assembleProdRelease, with the same key. The watch app
-    # only pairs with a phone app signed by the same key, so a prod watch APK
-    # for these phone builds can only come from here, never a local build.
-    - name: Upload Wear OS APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: bitchord-wear-prod-release-signed
-        path: wearos/build/outputs/apk/prod/release/*.apk
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-prod-release-signed
+          path: app/build/outputs/apk/prod/release/*.apk
+
+      - name: Upload Wear OS APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-wear-prod-release-signed
+          path: wearos/build/outputs/apk/prod/release/*.apk
+
+  # Official Release Job: builds Phone universal + 3 splits + Wear APK, creates GitHub Release
+  release-phone-and-wear:
+    name: Release Phone & Wear APKs
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate Keystore & Setup Secrets
+        run: |
+          # Fail fast if release keystore secret is missing or empty
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is missing or empty — cannot publish"
+            exit 1
+          fi
+
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
+          if [ ! -s bitchord-release.jks ]; then
+            echo "::error::Decoded keystore bitchord-release.jks is missing or empty — cannot publish"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.KEY_ALIAS }}" ] || [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+            echo "::error::Keystore credentials (KEYSTORE_PASSWORD, KEY_ALIAS, or KEY_PASSWORD) missing — cannot publish"
+            exit 1
+          fi
+
+          {
+            echo "storeFile=bitchord-release.jks"
+            echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}"
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}"
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+          } > keystore.properties
+
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          echo "LISTEN_TOGETHER_SERVER=${{ secrets.LISTEN_TOGETHER_SERVER }}" >> local.properties
+
+      - name: Validate Version Consistency
+        id: version_check
+        run: |
+          RAW_TAG="${{ inputs.tag || github.ref_name }}"
+          TAG_VER="${RAW_TAG#v}"
+
+          GRADLE_VER=$(grep 'extra\["bitchordVersionName"\]' build.gradle.kts | head -n 1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+          BETA_SUFFIX=$(grep 'extra\["bitchordBetaSuffix"\]' build.gradle.kts | head -n 1 | sed -E 's/.*=[[:space:]]*"([^"]*)".*/\1/')
+
+          echo "Checking tag version '$TAG_VER' against root build.gradle.kts bitchordVersionName '$GRADLE_VER'..."
+          if [ "$TAG_VER" != "$GRADLE_VER" ]; then
+            echo "::error::Tag version ($TAG_VER) does not match root bitchordVersionName ($GRADLE_VER) — cannot publish without version bump"
+            exit 1
+          fi
+
+          if [ -n "$BETA_SUFFIX" ]; then
+            echo "::error::bitchordBetaSuffix is not empty ('$BETA_SUFFIX') in build.gradle.kts — clear it before cutting a release"
+            exit 1
+          fi
+
+          echo "RELEASE_TAG=v$GRADLE_VER" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$GRADLE_VER" >> $GITHUB_ENV
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Signed Prod Release (Phone & Wear)
+        run: ./gradlew assembleProdRelease
+
+      - name: Verify Signatures & Stage Phone and Wear APKs
+        run: |
+          PHONE_DIR="app/build/outputs/apk/prod/release"
+          WEAR_DIR="wearos/build/outputs/apk/prod/release"
+
+          echo "Outputs in $PHONE_DIR:"
+          ls -la "$PHONE_DIR"
+
+          # Fail fast if any unsigned APK was generated
+          if ls "$PHONE_DIR"/*unsigned*.apk 1> /dev/null 2>&1; then
+            echo "::error::Found unsigned APK in $PHONE_DIR — keystore missing/invalid — cannot publish"
+            exit 1
+          fi
+
+          if ls "$WEAR_DIR"/*unsigned*.apk 1> /dev/null 2>&1; then
+            echo "::error::Found unsigned APK in $WEAR_DIR — keystore missing/invalid — cannot publish"
+            exit 1
+          fi
+
+          mkdir -p dist
+
+          # 1. Universal Phone APK (BitChord-<tag>.apk)
+          if [ -f "$PHONE_DIR/BitChord-${RELEASE_TAG}.apk" ]; then
+            cp -v "$PHONE_DIR/BitChord-${RELEASE_TAG}.apk" dist/
+          elif ls "$PHONE_DIR"/*universal*.apk 1> /dev/null 2>&1; then
+            cp -v "$PHONE_DIR"/*universal*.apk "dist/BitChord-${RELEASE_TAG}.apk"
+          else
+            echo "::error::Universal phone APK not found in $PHONE_DIR"
+            exit 1
+          fi
+
+          # 2. ABI Splits (BitChord-<tag>_<abi>.apk)
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ -f "$PHONE_DIR/BitChord-${RELEASE_TAG}_${abi}.apk" ]; then
+              cp -v "$PHONE_DIR/BitChord-${RELEASE_TAG}_${abi}.apk" dist/
+            elif ls "$PHONE_DIR"/*"${abi}"*.apk 1> /dev/null 2>&1; then
+              cp -v "$PHONE_DIR"/*"${abi}"*.apk "dist/BitChord-${RELEASE_TAG}_${abi}.apk"
+            else
+              echo "::error::Split phone APK for $abi not found in $PHONE_DIR"
+              exit 1
+            fi
+          done
+
+          # 3. Wear OS APK
+          if ls "$WEAR_DIR"/BitChordWear*.apk 1> /dev/null 2>&1; then
+            cp -v "$WEAR_DIR"/BitChordWear*.apk dist/
+          else
+            echo "::error::BitChordWear APK not found in $WEAR_DIR"
+            exit 1
+          fi
+
+          echo "Verified staged release files in dist/:"
+          ls -la dist/
+
+      - name: Create GitHub Release
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true || inputs.publish_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          make_latest: true
+          draft: false
+          prerelease: false
+          files: dist/*
+
+      - name: Upload Phone & Wear Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-${{ env.RELEASE_TAG }}-phone-wear
+          path: dist/*
+
+  # Official Release Job: builds TV universal + 3 splits, attaches to the GitHub Release
+  release-tv:
+    name: Release TV APKs
+    needs: [release-phone-and-wear]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate Keystore & Setup Secrets
+        run: |
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is missing or empty — cannot publish"
+            exit 1
+          fi
+
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
+          if [ ! -s bitchord-release.jks ]; then
+            echo "::error::Decoded keystore bitchord-release.jks is missing or empty — cannot publish"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.KEY_ALIAS }}" ] || [ -z "${{ secrets.KEY_PASSWORD }}" ]; then
+            echo "::error::Keystore credentials (KEYSTORE_PASSWORD, KEY_ALIAS, or KEY_PASSWORD) missing — cannot publish"
+            exit 1
+          fi
+
+          {
+            echo "storeFile=bitchord-release.jks"
+            echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}"
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}"
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+          } > keystore.properties
+
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          echo "LISTEN_TOGETHER_SERVER=${{ secrets.LISTEN_TOGETHER_SERVER }}" >> local.properties
+
+      - name: Determine Tag & Version
+        run: |
+          RAW_TAG="${{ inputs.tag || github.ref_name }}"
+          TAG_VER="${RAW_TAG#v}"
+          GRADLE_VER=$(grep 'extra\["bitchordVersionName"\]' build.gradle.kts | head -n 1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+          echo "RELEASE_TAG=v$GRADLE_VER" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$GRADLE_VER" >> $GITHUB_ENV
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Signed TV Prod Release
+        run: ./gradlew :tv:assembleProdRelease -Pbitchord.strictSigning=true
+
+      - name: Verify Signatures & Stage TV APKs
+        run: |
+          TV_DIR="tv/build/outputs/apk/prod/release"
+          echo "Outputs in $TV_DIR:"
+          ls -la "$TV_DIR"
+
+          # Fail fast if unsigned
+          if ls "$TV_DIR"/*unsigned*.apk 1> /dev/null 2>&1; then
+            echo "::error::Found unsigned APK in $TV_DIR — keystore missing/invalid — cannot publish"
+            exit 1
+          fi
+
+          # Fail fast if signed with Android Debug certificate
+          for apk in "$TV_DIR"/*.apk; do
+            if keytool -printcert -jarfile "$apk" | grep -i "Android Debug" > /dev/null; then
+              echo "::error::$apk was signed with Android Debug key — cannot publish"
+              exit 1
+            fi
+          done
+
+          mkdir -p dist-tv
+
+          # 1. Universal TV APK (BitChordTV-<tag>.apk)
+          if [ -f "$TV_DIR/BitChordTV-${RELEASE_TAG}.apk" ]; then
+            cp -v "$TV_DIR/BitChordTV-${RELEASE_TAG}.apk" dist-tv/
+          elif ls "$TV_DIR"/*universal*.apk 1> /dev/null 2>&1; then
+            cp -v "$TV_DIR"/*universal*.apk "dist-tv/BitChordTV-${RELEASE_TAG}.apk"
+          else
+            echo "::error::Universal TV APK not found in $TV_DIR"
+            exit 1
+          fi
+
+          # 2. ABI Splits (BitChordTV-<tag>_<abi>.apk)
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ -f "$TV_DIR/BitChordTV-${RELEASE_TAG}_${abi}.apk" ]; then
+              cp -v "$TV_DIR/BitChordTV-${RELEASE_TAG}_${abi}.apk" dist-tv/
+            elif ls "$TV_DIR"/*"${abi}"*.apk 1> /dev/null 2>&1; then
+              cp -v "$TV_DIR"/*"${abi}"*.apk "dist-tv/BitChordTV-${RELEASE_TAG}_${abi}.apk"
+            else
+              echo "::error::Split TV APK for $abi not found in $TV_DIR"
+              exit 1
+            fi
+          done
+
+          echo "Verified staged TV files in dist-tv/:"
+          ls -la dist-tv/
+
+      - name: Attach TV APKs to GitHub Release
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true || inputs.publish_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: dist-tv/*
+
+      - name: Upload TV Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-${{ env.RELEASE_TAG }}-tv
+          path: dist-tv/*
