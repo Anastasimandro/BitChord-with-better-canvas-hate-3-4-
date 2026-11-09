@@ -235,6 +235,9 @@
     <string name="liquid_glass_unavailable">ต้องใช้ Android 12 ขึ้นไป</string>
     <string name="full_screen_cover_art">ปกอัลบั้มเต็มจอ</string>
     <string name="animated_cover_art">ปกอัลบั้มเคลื่อนไหว</string>
+    <string name="animated_cover_shape">รูปร่างปกแบบเคลื่อนไหว</string>
+    <string name="animated_cover_shape_portrait">3:4 (แนวตั้ง)</string>
+    <string name="animated_cover_shape_square">1:1 (สี่เหลี่ยมจัตุรัส)</string>
     <string name="synced_lyrics">เนื้อเพลงซิงค์</string>
     <string name="synced_lyrics_subtitle">ไฮไลต์คำร้องบนหน้าเครื่องเล่นตามจังหวะที่ร้อง</string>
     <string name="lyrics_sources">แหล่งเนื้อเพลง</string>

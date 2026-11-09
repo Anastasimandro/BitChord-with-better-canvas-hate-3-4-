@@ -229,6 +229,9 @@
     <string name="liquid_glass_unavailable">Requiere Android 12 o posterior</string>
     <string name="full_screen_cover_art">Portada a pantalla completa</string>
     <string name="animated_cover_art">Portada animada</string>
+    <string name="animated_cover_shape">Forma de la portada animada</string>
+    <string name="animated_cover_shape_portrait">3:4 (panorámico)</string>
+    <string name="animated_cover_shape_square">1:1 (cuadrado)</string>
     <string name="synced_lyrics">Letras sincronizadas</string>
     <string name="synced_lyrics_subtitle">Ilumina las palabras mientras se cantan</string>
     <string name="lyrics_sources">Fuentes de letras</string>

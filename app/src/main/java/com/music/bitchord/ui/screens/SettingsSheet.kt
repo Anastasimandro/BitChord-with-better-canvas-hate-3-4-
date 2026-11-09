@@ -252,6 +252,7 @@ fun SettingsScreen(
     val lyricsBlur by AppSettings.lyricsBlur.collectAsStateWithLifecycle()
     val animatedCanvas by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
     val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+    val canvasPreferPortrait by AppSettings.canvasPreferPortrait.collectAsStateWithLifecycle()
     val signatureApiEnabled by AppSettings.signatureApiEnabled.collectAsStateWithLifecycle()
     val signatureApiUrl by AppSettings.signatureApiUrl.collectAsStateWithLifecycle()
     val fullBleedArtwork by AppSettings.fullBleedArtwork.collectAsStateWithLifecycle()
@@ -1193,6 +1194,38 @@ fun SettingsScreen(
                         checked = canvasOverCellular,
                         onCheckedChange = AppSettings::setCanvasOverCellular,
                     )
+                }
+                // Also part of Animated cover art: the rendition the player
+                // mounts. Two states rather than a switch, because neither is
+                // "off" — the square is the classic shape, the portrait is the
+                // full-screen one. Shown even for providers with no portrait
+                // rendition so the row does not disappear song by song.
+                val coverShapeTitle = stringResource(R.string.animated_cover_shape)
+                row(coverShapeTitle, "square", "aspect", "canvas", divided = false) {
+                    Column(
+                        modifier = Modifier.padding(
+                            start = ROW_INSET,
+                            end = ROW_INSET,
+                            bottom = 14.dp,
+                        ),
+                    ) {
+                        Text(
+                            text = coverShapeTitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SegmentedControl(
+                            options = listOf(
+                                stringResource(R.string.animated_cover_shape_square),
+                                stringResource(R.string.animated_cover_shape_portrait),
+                            ),
+                            selectedIndex = if (canvasPreferPortrait) 1 else 0,
+                            onSelect = { AppSettings.setCanvasPreferPortrait(it == 1) },
+                        )
+                    }
                 }
                 val spotifyCanvasTitle = stringResource(R.string.integrate_spotify_canvas)
                 row(spotifyCanvasTitle, "spotify", "canvas", divided = false) {

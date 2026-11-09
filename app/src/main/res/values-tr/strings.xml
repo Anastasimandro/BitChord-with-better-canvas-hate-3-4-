@@ -241,6 +241,9 @@
     <string name="liquid_glass_unavailable">Android 12 veya daha yenisini gerektirir</string>
     <string name="full_screen_cover_art">Tam ekran kapak resmi</string>
     <string name="animated_cover_art">Hareketli kapak resmi</string>
+    <string name="animated_cover_shape">Hareketli kapak şekli</string>
+    <string name="animated_cover_shape_portrait">3:4 (dikey)</string>
+    <string name="animated_cover_shape_square">1:1 (kare)</string>
     <string name="synced_lyrics">Senkronize sözler</string>
     <string name="synced_lyrics_subtitle">Söylenirken oynatıcıdaki kelimeleri aydınlatır</string>
     <string name="lyrics_sources">Söz kaynakları</string>

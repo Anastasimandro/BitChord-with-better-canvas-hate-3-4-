@@ -216,6 +216,9 @@
     <string name="disable_blend_effects_subtitle">Zeigt Player-Symbole, Text und dunkle Menüs in reinem Weiß, statt sie mit dem Cover einzufärben</string>
     <string name="full_screen_cover_art">Vollbild-Cover</string>
     <string name="animated_cover_art">Animiertes Cover</string>
+    <string name="animated_cover_shape">Form des animierten Covers</string>
+    <string name="animated_cover_shape_portrait">3:4 (Hochformat)</string>
+    <string name="animated_cover_shape_square">1:1 (quadratisch)</string>
     <string name="synced_lyrics">Synchronisierte Songtexte</string>
     <string name="synced_lyrics_subtitle">Hebt die Wörter im Player passend zum Gesang hervor</string>
     <string name="lyrics_sources">Songtext-Quellen</string>

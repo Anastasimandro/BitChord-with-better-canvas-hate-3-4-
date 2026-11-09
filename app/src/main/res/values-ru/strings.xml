@@ -226,6 +226,9 @@
     <string name="disable_blend_effects_subtitle">Показывает значки, текст и тёмные меню плеера чисто белыми, не окрашивая их в цвета обложки</string>
     <string name="full_screen_cover_art">Обложка на весь экран</string>
     <string name="animated_cover_art">Анимированная обложка</string>
+    <string name="animated_cover_shape">Форма анимированной обложки</string>
+    <string name="animated_cover_shape_portrait">3:4 (портрет)</string>
+    <string name="animated_cover_shape_square">1:1 (квадрат)</string>
     <string name="synced_lyrics">Синхронизированный текст</string>
     <string name="synced_lyrics_subtitle">Подсвечивает слова в плеере по мере исполнения</string>
     <string name="lyrics_sources">Источники текстов</string>

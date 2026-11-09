@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="animated_cover_shape">Bentuk sampul animasi</string>
+    <string name="animated_cover_shape_portrait">3:4 (potret)</string>
+    <string name="animated_cover_shape_square">1:1 (persegi)</string>
     <string name="analysis_complete">dianalisis</string>
     <string name="analysis_in_progress">menganalisis…</string>
     <string name="analysis_refining">dianalisis, menyempurnakan…</string>

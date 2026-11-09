@@ -211,6 +211,9 @@
     <string name="disable_blend_effects_subtitle">播放器圖示、文字和深色選單以純白顯示，不再混入封面顏色</string>
     <string name="full_screen_cover_art">全屏封面</string>
     <string name="animated_cover_art">動態封面</string>
+    <string name="animated_cover_shape">動態封面形狀</string>
+    <string name="animated_cover_shape_portrait">3:4（直向）</string>
+    <string name="animated_cover_shape_square">1:1（正方形）</string>
     <string name="synced_lyrics">同步歌詞</string>
     <string name="synced_lyrics_subtitle">隨著演唱在播放器上高亮顯示歌詞</string>
     <string name="lyrics_sources">歌詞來源</string>

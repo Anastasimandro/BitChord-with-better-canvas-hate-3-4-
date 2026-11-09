@@ -259,6 +259,9 @@
     <string name="liquid_glass_unavailable">Richiede Android 12 o versioni successive</string>
     <string name="full_screen_cover_art">Copertina a tutto schermo</string>
     <string name="animated_cover_art">Copertina animata</string>
+    <string name="animated_cover_shape">Forma della copertina animata</string>
+    <string name="animated_cover_shape_portrait">3:4 (verticale)</string>
+    <string name="animated_cover_shape_square">1:1 (quadrato)</string>
     <string name="synced_lyrics">Testi sincronizzati</string>
     <string name="synced_lyrics_subtitle">Evidenzia le parole sul player mentre vengono cantate</string>
     <string name="lyrics_sources">Sorgenti testi</string>

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="animated_cover_shape">Forme de la pochette animée</string>
+    <string name="animated_cover_shape_portrait">3:4 (portrait)</string>
+    <string name="animated_cover_shape_square">1:1 (carré)</string>
     <string name="analysis_complete">analysée</string>
     <string name="analysis_in_progress">analyse en cours…</string>
     <string name="analysis_refining">analysée, affinage…</string>

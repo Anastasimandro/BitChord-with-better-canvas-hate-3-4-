@@ -214,6 +214,9 @@
     <string name="disable_blend_effects_subtitle">Pokazuje ikony, tekst i ciemne menu odtwarzacza w czystej bieli zamiast barwić je kolorem okładki</string>
     <string name="full_screen_cover_art">Pełnoekranowa okładka</string>
     <string name="animated_cover_art">Animowana okładka</string>
+    <string name="animated_cover_shape">Kształt animowanej okładki</string>
+    <string name="animated_cover_shape_portrait">3:4 (pion)</string>
+    <string name="animated_cover_shape_square">1:1 (kwadrat)</string>
     <string name="synced_lyrics">Zsynchronizowany tekst</string>
     <string name="synced_lyrics_subtitle">Podświetla słowa na odtwarzaczu w miarę ich śpiewania</string>
     <string name="lyrics_sources">Źródła tekstów</string>

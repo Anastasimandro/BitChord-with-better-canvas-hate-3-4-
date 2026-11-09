@@ -217,6 +217,9 @@
     <string name="disable_blend_effects_subtitle">Affiche les icônes, le texte et les menus sombres du lecteur en blanc pur, sans les teinter avec la pochette</string>
     <string name="full_screen_cover_art">Pochette plein écran</string>
     <string name="animated_cover_art">Pochette animée</string>
+    <string name="animated_cover_shape">Forme de la pochette animée</string>
+    <string name="animated_cover_shape_portrait">3:4 (portrait)</string>
+    <string name="animated_cover_shape_square">1:1 (carré)</string>
     <string name="synced_lyrics">Paroles synchronisées</string>
     <string name="synced_lyrics_subtitle">Met en surbrillance les mots au fil de la chanson</string>
     <string name="lyrics_sources">Sources des paroles</string>

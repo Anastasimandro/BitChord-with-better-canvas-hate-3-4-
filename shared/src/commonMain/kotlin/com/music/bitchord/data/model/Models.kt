@@ -487,7 +487,7 @@ fun shelfLayoutFor(title: String, items: List<ShelfItem>, fromList: Boolean): Sh
     if (items.isEmpty()) return ShelfLayout.CARDS
     val first = items.first()
     if (fromList && first.videoId != null) return ShelfLayout.LIST
-    if (title.trim().equals("Listen again", ignoreCase = true)) return ShelfLayout.LIST
+    if (ShelfTitles.isListenAgainShelf(title)) return ShelfLayout.LIST
     if (items.count { it.isVideo } * 2 > items.size) return ShelfLayout.VIDEO
     return ShelfLayout.CARDS
 }

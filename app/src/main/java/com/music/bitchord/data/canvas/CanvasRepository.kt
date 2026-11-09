@@ -2,6 +2,7 @@ package com.music.bitchord.data.canvas
 
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.stripTypeSegments
 import com.music.bitchord.data.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -76,8 +77,10 @@ object CanvasRepository {
         if (song.videoId.isBlank() && (song.localUri != null || song.localPath != null)) return null
 
         val title = song.title.cleaned()
-        val artist = song.artist.cleaned()
-        if (title.isBlank() || artist.isBlank()) return null
+        // A label that survived in the credit ("Ken Carson, Álbum") is not an
+        // artist, and must not be searched for or held against a provider.
+        val artist = song.artist.cleanedCredit()
+        if (title.isBlank()) return null
 
         // Keyed on the track alone. The album is deliberately not part of
         // this: it arrives after the player opens, and keying on it made the
@@ -132,8 +135,8 @@ object CanvasRepository {
      */
     suspend fun canvasForAlbum(album: String, artist: String): CanvasArtwork? {
         val name = album.cleaned()
-        val credit = artist.cleaned()
-        if (name.isBlank() || credit.isBlank()) return null
+        val credit = artist.cleanedCredit()
+        if (name.isBlank()) return null
 
         val spotifyFirst = AppSettings.prioritizeSpotifyCanvas.value
         return resolve(cacheKey("album|$name|$credit", spotifyFirst), withAlbum = true) {
@@ -219,6 +222,14 @@ object CanvasRepository {
         .replace(Regex("\\s+"), " ")
         .trim()
         .ifBlank { this }
+
+    /**
+     * [cleaned] for a credit line, with any row-type label removed. A title
+     * may legitimately be called "Album"; a *credit* made of that word is a
+     * parse that survived, and treating it as an artist would only make every
+     * provider reject the track.
+     */
+    private fun String.cleanedCredit(): String = stripTypeSegments(cleaned())
 
     private val NOISE = Regex(
         """\((?:from|official|lyrical|video|audio)[^)]*\)|\[[^]]*]|""" +

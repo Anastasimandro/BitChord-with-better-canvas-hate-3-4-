@@ -355,6 +355,9 @@
     <string name="player_theme_simple_subtitle">플레이어 전체 뒤에 흐린 커버를 표시합니다</string>
     <string name="player_theme_legacy_subtitle">v1.5 버전의 플레이어 뒤에서 떠다니던 색상 거품을 다시 표시합니다</string>
     <string name="animated_cover_art">움직이는 커버 아트</string>
+    <string name="animated_cover_shape">애니메이션 커버 모양</string>
+    <string name="animated_cover_shape_portrait">3:4 (세로)</string>
+    <string name="animated_cover_shape_square">1:1 (정사각형)</string>
     <string name="artist_signatures">아티스트 서명</string>
     <string name="artist_signatures_subtitle">Apple Music에 타이틀 로고가 없으면 자필 서명을 표시합니다</string>
     <string name="artist_signatures_url">서명 API URL</string>

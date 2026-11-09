@@ -391,6 +391,9 @@
     <string name="player_theme_simple_subtitle">A soft blur of the cover behind the whole player</string>
     <string name="player_theme_legacy_subtitle">Brings back the drifting colour blobs behind the player from v1.5</string>
     <string name="animated_cover_art">Animated cover art</string>
+    <string name="animated_cover_shape">Animated cover shape</string>
+    <string name="animated_cover_shape_portrait">3:4 (portrait)</string>
+    <string name="animated_cover_shape_square">1:1 (square)</string>
     <string name="artist_signatures">Artist signatures</string>
     <string name="artist_signatures_subtitle">Shows a handwritten signature when Apple Music has no title logo</string>
     <string name="artist_signatures_url">Signature API URL</string>

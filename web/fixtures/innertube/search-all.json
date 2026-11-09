@@ -1749,6 +1749,76 @@
                             "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
                             "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
                           }
+                        },
+                        {
+                          "musicResponsiveListItemRenderer": {
+                            "trackingParams": "CLcDEOq_BRgAIhMIs7arx-y7lwMVXiGDAx3pVjXk",
+                            "flexColumns": [
+                              {
+                                "musicResponsiveListItemFlexColumnRenderer": {
+                                  "text": {
+                                    "runs": [
+                                      {
+                                        "text": "You And Whose Army?"
+                                      }
+                                    ]
+                                  },
+                                  "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                                }
+                              },
+                              {
+                                "musicResponsiveListItemFlexColumnRenderer": {
+                                  "text": {
+                                    "runs": [
+                                      {
+                                        "text": "Canción"
+                                      },
+                                      {
+                                        "text": " • "
+                                      },
+                                      {
+                                        "text": "3:11"
+                                      }
+                                    ],
+                                    "accessibility": {
+                                      "accessibilityData": {
+                                        "label": "Canción • 3 minutos, 11 segundos"
+                                      }
+                                    }
+                                  },
+                                  "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                                }
+                              },
+                              {
+                                "musicResponsiveListItemFlexColumnRenderer": {
+                                  "text": {
+                                    "runs": [
+                                      {
+                                        "text": "Vídeo"
+                                      },
+                                      {
+                                        "text": " • "
+                                      },
+                                      {
+                                        "text": "12 M de reproducciones"
+                                      }
+                                    ],
+                                    "accessibility": {
+                                      "accessibilityData": {
+                                        "label": "12 millones de reproducciones"
+                                      }
+                                    }
+                                  },
+                                  "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                                }
+                              }
+                            ],
+                            "playlistItemData": {
+                              "videoId": "QQnc-hM80UQ"
+                            },
+                            "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+                            "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+                          }
                         }
                       ],
                       "buttons": [

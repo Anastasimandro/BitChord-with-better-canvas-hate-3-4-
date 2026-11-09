@@ -558,6 +558,19 @@ object AppSettings {
      */
     val canvasOverCellular = MutableStateFlow(false)
 
+    /**
+     * Whether the phone player takes the 3:4 portrait rendition of a canvas
+     * clip when the provider has one, instead of the square one every provider
+     * ships.
+     *
+     * Off by default — the square is the classic shape and the one that needs
+     * no extra rendition. Only the phone player reads this; the TV keeps its
+     * square canvas in its 16:9 frame either way. Changing it swaps the url the
+     * player mounts and never asks for a different clip, so the search cache
+     * and any Spotify session are untouched.
+     */
+    val canvasPreferPortrait = MutableStateFlow(false)
+
     /** Automatically collapses the lower controls after Spotify Canvas settles. */
     val spotifyCanvasAutoHide = MutableStateFlow(true)
 
@@ -1056,6 +1069,7 @@ object AppSettings {
         }
         animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, true)
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
+        canvasPreferPortrait.value = prefs.getBoolean(KEY_CANVAS_PREFER_PORTRAIT, false)
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
         signatureApiEnabled.value = prefs.getBoolean(KEY_SIGNATURE_API_ENABLED, false)
@@ -1677,6 +1691,11 @@ object AppSettings {
     fun setCanvasOverCellular(value: Boolean) {
         canvasOverCellular.value = value
         prefs.edit().putBoolean(KEY_CANVAS_OVER_CELLULAR, value).apply()
+    }
+
+    fun setCanvasPreferPortrait(value: Boolean) {
+        canvasPreferPortrait.value = value
+        prefs.edit().putBoolean(KEY_CANVAS_PREFER_PORTRAIT, value).apply()
     }
 
     fun setSpotifyCanvasAutoHide(value: Boolean) {
@@ -2314,6 +2333,7 @@ object AppSettings {
     private const val KEY_TRANSLATION_LANGUAGE = "translation_language"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
+    private const val KEY_CANVAS_PREFER_PORTRAIT = "canvas_prefer_portrait"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"
     private const val KEY_PRIORITIZE_SPOTIFY_CANVAS = "prioritize_spotify_canvas"
     private const val KEY_SIGNATURE_API_ENABLED = "signature_api_enabled"

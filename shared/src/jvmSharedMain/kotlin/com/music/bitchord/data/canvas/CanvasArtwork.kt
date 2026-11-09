@@ -1,5 +1,6 @@
 package com.music.bitchord.data.canvas
 
+import com.music.bitchord.data.model.stripTypeSegments
 import java.text.Normalizer
 import java.util.Locale
 
@@ -52,9 +53,16 @@ data class CanvasArtwork(
         val titleOk = title == null || wantTitle.isBlank() ||
             title.normalizeForMatch() == wantTitle.normalizeForMatch()
 
-        val titleArtists = splitArtists(wantArtist)
-        val ourArtists = splitArtists(artist.orEmpty())
-        val artistOk = artist == null || wantArtist.isBlank() ||
+        // A row parsed before the parser knew the localised labels, or one that
+        // still carries no artist link, can arrive as "Ken Carson, Álbum".
+        // The label is not a credit; remove it before comparing. If that
+        // leaves nothing, the track has no usable artist credit, and holding
+        // the provider to one would reject every clip for it.
+        val wantArtistClean = stripTypeSegments(wantArtist)
+        val ourArtistClean = stripTypeSegments(artist.orEmpty())
+        val titleArtists = splitArtists(wantArtistClean)
+        val ourArtists = splitArtists(ourArtistClean)
+        val artistOk = artist == null || wantArtistClean.isBlank() ||
             (titleArtists.isNotEmpty() && ourArtists.isNotEmpty() &&
                 titleArtists.all { want -> ourArtists.any { it == want } })
 

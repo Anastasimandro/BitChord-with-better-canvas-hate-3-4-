@@ -941,11 +941,15 @@ fun NowPlayingScreen(
     // Square video thumbnails: the picture takes the sleeve's own slot, cropped
     // to it, in place of the full-width box at the video's shape.
     val squareVideo = videoMode && VideoThumbnails.square
+    val canvasPreferPortrait by PlayerSettings.canvasPreferPortrait.collectAsStateWithLifecycle()
     val canvas = rememberCanvasArtwork(song)?.takeUnless { videoMode }?.let {
         // Apple's 3:4 rendition runs under the whole phone screen, the way its
-        // own player shows it; the square one stays the fallback.
+        // own player shows it, but only when the listener picked that shape;
+        // otherwise the square is what mounts. The choice swaps the url here
+        // and never enters rememberCanvasArtwork's keys, so no clip is
+        // re-searched and no Spotify session is dropped.
         val tall = it.portraitUrl
-        if (tall != null && playerFillsWindow(windowWidth)) {
+        if (tall != null && canvasPreferPortrait && playerFillsWindow(windowWidth)) {
             it.copy(url = tall, fallbackUrl = it.url, portraitUrl = null)
         } else it
     }

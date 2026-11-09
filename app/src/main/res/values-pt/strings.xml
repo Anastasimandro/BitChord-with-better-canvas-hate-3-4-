@@ -218,6 +218,9 @@
     <string name="disable_blend_effects_subtitle">Mostra ícones, texto e menus escuros do player em branco, sem tingi-los com a capa</string>
     <string name="full_screen_cover_art">Capa em tela cheia</string>
     <string name="animated_cover_art">Capa animada</string>
+    <string name="animated_cover_shape">Forma da capa animada</string>
+    <string name="animated_cover_shape_portrait">3:4 (retrato)</string>
+    <string name="animated_cover_shape_square">1:1 (quadrado)</string>
     <string name="synced_lyrics">Letras sincronizadas</string>
     <string name="synced_lyrics_subtitle">Destaca as palavras no player conforme são cantadas</string>
     <string name="lyrics_sources">Fontes de letras</string>

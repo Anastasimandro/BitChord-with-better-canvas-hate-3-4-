@@ -20,6 +20,7 @@ import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.ShelfTitles
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.SongMenu
 import com.music.bitchord.data.model.UserPlaylist
@@ -209,13 +210,10 @@ object YtMusicRepository {
         val homeRaw = runCatching { Innertube.browse("FEmusic_home") }.getOrNull()
         val shelves = if (homeRaw != null) InnertubeParser.parseHome(homeRaw) else emptyList()
 
-        // 1. Direct "Quick picks" or "Mix" or "Recommendations" shelf
-        val qpShelf = shelves.firstOrNull {
-            it.title.contains("quick", ignoreCase = true) ||
-                it.title.contains("pick", ignoreCase = true) ||
-                it.title.contains("mix", ignoreCase = true) ||
-                it.title.contains("recommend", ignoreCase = true)
-        }
+        // 1. Direct "Quick picks" / "Mixed for you" / "Recommendations" shelf (all languages).
+        //    ShelfTitles provides multi-language exact matching; legacy English substrings are
+        //    preserved inside isQuickPicksFamilyShelf as a backward-compatible fallback.
+        val qpShelf = shelves.firstOrNull { ShelfTitles.isQuickPicksFamilyShelf(it.title) }
         val qpSongs = qpShelf?.items?.mapNotNull { item ->
             item.videoId?.takeUnless { it in excludeSongIds }?.let { vid ->
                 Song(
@@ -228,13 +226,11 @@ object YtMusicRepository {
         }.orEmpty()
         if (qpSongs.isNotEmpty()) return@call qpSongs
 
-        // 2. All shelves on Home (excluding shelves mentioning recent/history, and skipping top shelf if multiple exist)
+        // 2. All shelves on Home (excluding history/recents in any language, and skipping top shelf if multiple exist)
         val candidateShelves = if (shelves.size > 1) {
-            shelves.drop(1).filterNot {
-                it.title.contains("recent", ignoreCase = true) ||
-                    it.title.contains("history", ignoreCase = true) ||
-                    it.title.contains("listen again", ignoreCase = true)
-            }
+            // ShelfTitles.isHistoryOrRecentsShelf covers all supported translations exactly.
+            // English-only substrings missed "Escuchar de nuevo" and similar localised titles.
+            shelves.drop(1).filterNot { ShelfTitles.isHistoryOrRecentsShelf(it.title) }
         } else shelves
 
         val homeShelfSongs = candidateShelves.flatMap { shelf ->

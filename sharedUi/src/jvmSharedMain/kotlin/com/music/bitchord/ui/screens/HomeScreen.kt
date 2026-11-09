@@ -69,6 +69,11 @@ import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.ShelfLayout
+import com.music.bitchord.data.model.ShelfTitles
+import com.music.bitchord.data.model.ShelfKind
+import com.music.bitchord.data.model.ShelfSubtitleKind
+import com.music.bitchord.data.model.CardTallyKind
+import com.music.bitchord.data.model.typeOf
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.TopPick
 import com.music.bitchord.data.model.TopPickMood
@@ -94,7 +99,7 @@ import com.music.bitchord.ui.player.MeshPalette
 /** How far the Listen now heading and feed sit above the shared top inset. */
 private val HOME_TITLE_LIFT = 28.dp
 
-private const val RECENTS_TITLE = "Recents"
+// RECENTS_TITLE removed � use ShelfTitles.isRecentsShelf() for multi-language detection
 private const val RECENT_TRACKS_PER_COLUMN = 4
 
 private fun List<ShelfItem>.playingItemMatcher(song: Song?): (ShelfItem) -> Boolean {
@@ -288,7 +293,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
             // Listen again and Quick picks are lists on the web player, as
             // Recents is here: one pager for all three.
             if (shelf.layout == ShelfLayout.LIST ||
-                (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true))
+                (index == 0 && ShelfTitles.isRecentsShelf(shelf.title))
             ) {
                 RecentShelf(
                     shelf = shelf,
@@ -554,128 +559,45 @@ internal fun SectionHeader(title: String, subtitle: String = "", onShowAll: (() 
 @Composable
 internal fun localizeShelfTitle(title: String): String {
     val trimmed = title.trim()
-    return when {
-        trimmed.equals("Recents", ignoreCase = true) ||
-            trimmed.equals("Recently played", ignoreCase = true) ||
-            trimmed.equals("Gần đây", ignoreCase = true) ||
-            trimmed.equals("最近", ignoreCase = true) ->
-            stringResource(Res.string.shelf_recents)
-        trimmed.equals("Playlists", ignoreCase = true) ||
-            trimmed.equals("Danh sách phát", ignoreCase = true) ||
-            trimmed.equals("再生リスト", ignoreCase = true) ->
-            stringResource(Res.string.playlists)
-        trimmed.equals("Albums", ignoreCase = true) ||
-            trimmed.equals("Album", ignoreCase = true) ||
-            trimmed.equals("アルバム", ignoreCase = true) ->
-            stringResource(Res.string.albums)
-        trimmed.equals("Artists", ignoreCase = true) ||
-            trimmed.equals("Nghệ sĩ", ignoreCase = true) ||
-            trimmed.equals("アーティスト", ignoreCase = true) ->
-            stringResource(Res.string.artists)
-        trimmed.equals("Subscriptions", ignoreCase = true) ||
-            trimmed.equals("Đã đăng ký", ignoreCase = true) ||
-            trimmed.equals("登録チャンネル", ignoreCase = true) ->
-            stringResource(Res.string.subscriptions)
-        trimmed.equals("Trending community playlists", ignoreCase = true) ||
-            trimmed.equals("Danh sách phát cộng đồng thịnh hành", ignoreCase = true) ||
-            trimmed.equals("Danh sách phát thịnh hành trong cộng đồng người dùng", ignoreCase = true) ||
-            trimmed.equals("急上昇のコミュニティ再生リスト", ignoreCase = true) ->
-            stringResource(Res.string.shelf_trending_community_playlists)
-        trimmed.equals("Featured playlists for you", ignoreCase = true) ||
-            trimmed.equals("Danh sách phát đề xuất cho bạn", ignoreCase = true) ||
-            trimmed.equals("Danh sách phát nổi bật dành cho bạn", ignoreCase = true) ||
-            trimmed.equals("おすすめの再生リスト", ignoreCase = true) ->
-            stringResource(Res.string.shelf_featured_playlists_for_you)
-        trimmed.equals("Quick picks", ignoreCase = true) ||
-            trimmed.equals("Lựa chọn nhanh", ignoreCase = true) ||
-            trimmed.equals("Chọn nhanh đài phát", ignoreCase = true) ||
-            trimmed.equals("クイック ミックス", ignoreCase = true) ->
-            stringResource(Res.string.shelf_quick_picks)
-        trimmed.equals("Listen again", ignoreCase = true) ||
-            trimmed.equals("Nghe lại", ignoreCase = true) ||
-            trimmed.equals("もう一度聴く", ignoreCase = true) ->
-            stringResource(Res.string.shelf_listen_again)
-        trimmed.equals("Mixed for you", ignoreCase = true) ||
-            trimmed.equals("Dành riêng cho bạn", ignoreCase = true) ||
-            trimmed.equals("ミックス", ignoreCase = true) ->
-            stringResource(Res.string.shelf_mixed_for_you)
-        trimmed.startsWith("Similar to", ignoreCase = true) -> {
-            val rest = trimmed.substring(10).trim()
-            stringResource(Res.string.shelf_similar_to, rest)
-        }
-        trimmed.startsWith("Tương tự như", ignoreCase = true) -> {
-            val rest = trimmed.substring(12).trim()
-            stringResource(Res.string.shelf_similar_to, rest)
-        }
-        trimmed.equals("Forgotten favorites", ignoreCase = true) ||
-            trimmed.equals("Giai điệu quen thuộc", ignoreCase = true) ||
-            trimmed.equals("よく聴いたお気に入りの曲", ignoreCase = true) ->
-            stringResource(Res.string.shelf_forgotten_favorites)
-        trimmed.equals("Recommended music videos", ignoreCase = true) ||
-            trimmed.equals("Video âm nhạc đề xuất", ignoreCase = true) ||
-            trimmed.equals("おすすめのミュージック ビデオ", ignoreCase = true) ->
-            stringResource(Res.string.shelf_recommended_music_videos)
-        trimmed.equals("From your library", ignoreCase = true) ||
-            trimmed.equals("Từ thư viện của bạn", ignoreCase = true) ||
-            trimmed.equals("ライブラリから", ignoreCase = true) ->
-            stringResource(Res.string.shelf_from_your_library)
-        trimmed.equals("Charts", ignoreCase = true) ||
-            trimmed.equals("Bảng xếp hạng", ignoreCase = true) ||
-            trimmed.equals("チャート", ignoreCase = true) ->
-            stringResource(Res.string.shelf_charts)
-        trimmed.equals("New releases", ignoreCase = true) ||
-            trimmed.equals("Bản phát hành mới", ignoreCase = true) ||
-            trimmed.equals("最新リリース", ignoreCase = true) ->
-            stringResource(Res.string.shelf_new_releases)
-        trimmed.equals("Top music videos", ignoreCase = true) ||
-            trimmed.equals("Video âm nhạc hàng đầu", ignoreCase = true) ||
-            trimmed.equals("人気のミュージック ビデオ", ignoreCase = true) ->
-            stringResource(Res.string.shelf_top_music_videos)
-        trimmed.equals("For you", ignoreCase = true) ||
-            trimmed.equals("Dành cho bạn", ignoreCase = true) ||
-            trimmed.equals("あなたへのおすすめ", ignoreCase = true) ->
-            stringResource(Res.string.shelf_for_you)
-        trimmed.equals("Hits today", ignoreCase = true) ||
-            trimmed.equals("Today's Hits", ignoreCase = true) ||
-            trimmed.equals("Bản hit hôm nay", ignoreCase = true) ||
-            trimmed.equals("今日のヒット曲", ignoreCase = true) ->
-            stringResource(Res.string.shelf_hits_today)
-        trimmed.equals("Artists on the rise", ignoreCase = true) ||
-            trimmed.equals("Nghệ sĩ đang lên", ignoreCase = true) ->
-            stringResource(Res.string.shelf_artists_on_the_rise)
-        trimmed.equals("Concerts", ignoreCase = true) ||
-            trimmed.equals("Buổi hòa nhạc", ignoreCase = true) ||
-            trimmed.equals("コンサート", ignoreCase = true) ->
-            stringResource(Res.string.shelf_concerts)
-        trimmed.startsWith("Shorts", ignoreCase = true) ||
-            trimmed.equals("Shorts nổi bật", ignoreCase = true) ||
-            trimmed.equals("ショート", ignoreCase = true) ->
-            stringResource(Res.string.shelf_shorts)
-        trimmed.equals("Trending", ignoreCase = true) ||
-            trimmed.equals("Thịnh hành", ignoreCase = true) ||
-            trimmed.equals("急上昇", ignoreCase = true) ->
-            stringResource(Res.string.shelf_trending)
-        else -> title
+    val similarArtist = ShelfTitles.extractSimilarToArtist(trimmed)
+    if (similarArtist != null) {
+        return stringResource(Res.string.shelf_similar_to, similarArtist)
+    }
+    return when (ShelfTitles.classifyShelf(trimmed)) {
+        ShelfKind.RECENTS -> stringResource(Res.string.shelf_recents)
+        ShelfKind.PLAYLISTS -> stringResource(Res.string.playlists)
+        ShelfKind.ALBUMS -> stringResource(Res.string.albums)
+        ShelfKind.ARTISTS -> stringResource(Res.string.artists)
+        ShelfKind.SUBSCRIPTIONS -> stringResource(Res.string.subscriptions)
+        ShelfKind.TRENDING_COMMUNITY_PLAYLISTS -> stringResource(Res.string.shelf_trending_community_playlists)
+        ShelfKind.FEATURED_PLAYLISTS_FOR_YOU -> stringResource(Res.string.shelf_featured_playlists_for_you)
+        ShelfKind.QUICK_PICKS -> stringResource(Res.string.shelf_quick_picks)
+        ShelfKind.LISTEN_AGAIN -> stringResource(Res.string.shelf_listen_again)
+        ShelfKind.MIXED_FOR_YOU -> stringResource(Res.string.shelf_mixed_for_you)
+        ShelfKind.FORGOTTEN_FAVORITES -> stringResource(Res.string.shelf_forgotten_favorites)
+        ShelfKind.RECOMMENDED_MUSIC_VIDEOS -> stringResource(Res.string.shelf_recommended_music_videos)
+        ShelfKind.FROM_YOUR_LIBRARY -> stringResource(Res.string.shelf_from_your_library)
+        ShelfKind.CHARTS -> stringResource(Res.string.shelf_charts)
+        ShelfKind.NEW_RELEASES -> stringResource(Res.string.shelf_new_releases)
+        ShelfKind.TOP_MUSIC_VIDEOS -> stringResource(Res.string.shelf_top_music_videos)
+        ShelfKind.FOR_YOU -> stringResource(Res.string.shelf_for_you)
+        ShelfKind.HITS_TODAY -> stringResource(Res.string.shelf_hits_today)
+        ShelfKind.ARTISTS_ON_THE_RISE -> stringResource(Res.string.shelf_artists_on_the_rise)
+        ShelfKind.CONCERTS -> stringResource(Res.string.shelf_concerts)
+        ShelfKind.SHORTS -> stringResource(Res.string.shelf_shorts)
+        ShelfKind.TRENDING -> stringResource(Res.string.shelf_trending)
+        null -> title
     }
 }
+
 @Composable
 internal fun localizeShelfSubtitle(subtitle: String): String {
     val trimmed = subtitle.trim()
-    return when {
-        trimmed.equals("TOP TUNES RIGHT NOW", ignoreCase = true) ||
-            trimmed.equals("Top tunes right now", ignoreCase = true) ||
-            trimmed.equals("Giai điệu hàng đầu hiện nay", ignoreCase = true) ||
-            trimmed.equals("注目の曲", ignoreCase = true) ->
-            stringResource(Res.string.shelf_top_tunes_right_now)
-        trimmed.equals("From the community", ignoreCase = true) ||
-            trimmed.equals("Từ cộng đồng", ignoreCase = true) ||
-            trimmed.equals("コミュニティより", ignoreCase = true) ->
-            stringResource(Res.string.shelf_from_the_community)
-        trimmed.equals("YouTube Charts", ignoreCase = true) ||
-            trimmed.equals("Bảng xếp hạng YouTube", ignoreCase = true) ||
-            trimmed.equals("YouTube チャート", ignoreCase = true) ->
-            stringResource(Res.string.shelf_youtube_charts)
-        else -> subtitle
+    return when (ShelfTitles.classifySubtitle(trimmed)) {
+        ShelfSubtitleKind.TOP_TUNES_RIGHT_NOW -> stringResource(Res.string.shelf_top_tunes_right_now)
+        ShelfSubtitleKind.FROM_THE_COMMUNITY -> stringResource(Res.string.shelf_from_the_community)
+        ShelfSubtitleKind.YOUTUBE_CHARTS -> stringResource(Res.string.shelf_youtube_charts)
+        null -> subtitle
     }
 }
 
@@ -690,32 +612,23 @@ internal fun localizeCardSubtitle(subtitle: String): String {
     val playlistLabel = stringResource(Res.string.playlist)
     val localizedParts = parts.map { part ->
         val trimmed = part.trim()
-        val lower = trimmed.lowercase(Locale.ROOT)
-        when {
-            trimmed.equals("Song", ignoreCase = true) || trimmed.equals("Titre", ignoreCase = true) ||
-                trimmed.equals("Bài hát", ignoreCase = true) || trimmed.equals("曲", ignoreCase = true) -> songLabel
-            trimmed.equals("Single", ignoreCase = true) || trimmed.equals("Đĩa đơn", ignoreCase = true) ||
-                trimmed.equals("シングル", ignoreCase = true) -> singleLabel
-            trimmed.equals("Chart", ignoreCase = true) || trimmed.equals("Bảng xếp hạng", ignoreCase = true) ||
-                trimmed.equals("チャート", ignoreCase = true) -> chartLabel
-            trimmed.equals("Playlist", ignoreCase = true) || trimmed.equals("Danh sách phát", ignoreCase = true) ||
-                trimmed.equals("再生リスト", ignoreCase = true) -> playlistLabel
-            lower.endsWith(" views") || lower.endsWith(" view") || lower.endsWith(" lượt xem") ||
-                lower.endsWith(" 回視聴") || lower.endsWith("回視聴") -> {
-                val count = trimmed.substringBeforeLast(' ', "").trim()
-                if (count.any { it.isDigit() }) stringResource(Res.string.card_views_format, count) else part
+        when (typeOf(trimmed)) {
+            "song" -> songLabel
+            "single" -> singleLabel
+            "playlist" -> playlistLabel
+            else -> {
+                if (ShelfTitles.isChartLabel(trimmed)) {
+                    chartLabel
+                } else {
+                    val tally = ShelfTitles.parseCardTally(trimmed)
+                    when (tally?.kind) {
+                        CardTallyKind.VIEWS -> stringResource(Res.string.card_views_format, tally.count)
+                        CardTallyKind.PLAYS -> stringResource(Res.string.card_plays_format, tally.count)
+                        CardTallyKind.SONGS -> stringResource(Res.string.card_songs_format, tally.count)
+                        null -> part
+                    }
+                }
             }
-            lower.endsWith(" plays") || lower.endsWith(" play") || lower.endsWith(" lượt phát") ||
-                lower.endsWith(" 回再生") || lower.endsWith("回再生") -> {
-                val count = trimmed.substringBeforeLast(' ', "").trim()
-                if (count.any { it.isDigit() }) stringResource(Res.string.card_plays_format, count) else part
-            }
-            lower.endsWith(" songs") || lower.endsWith(" song") || lower.endsWith(" bài hát") ||
-                lower.endsWith(" 曲") || lower.endsWith("曲") -> {
-                val count = trimmed.substringBeforeLast(' ', "").trim()
-                if (count.any { it.isDigit() }) stringResource(Res.string.card_songs_format, count) else part
-            }
-            else -> part
         }
     }
     return localizedParts.joinToString(delimiter)

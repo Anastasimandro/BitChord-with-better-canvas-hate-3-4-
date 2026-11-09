@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="animated_cover_shape">एनिमेटेड कवर का आकार</string>
+    <string name="animated_cover_shape_portrait">3:4 (पोर्ट्रेट)</string>
+    <string name="animated_cover_shape_square">1:1 (वर्ग)</string>
     <string name="analysis_complete">विश्लेषित</string>
     <string name="analysis_in_progress">विश्लेषण हो रहा है…</string>
     <string name="analysis_refining">विश्लेषित, सुधार हो रहा है…</string>

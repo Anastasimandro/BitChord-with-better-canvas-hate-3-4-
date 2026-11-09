@@ -217,6 +217,9 @@
     <string name="disable_blend_effects_subtitle">מציג את סמלי הנגן, הטקסט והתפריטים הכהים בלבן רגיל במקום לצבוע אותם בצבעי העטיפה</string>
     <string name="full_screen_cover_art">עטיפת אלבום במסך מלא</string>
     <string name="animated_cover_art">עטיפת אלבום מונפשת</string>
+    <string name="animated_cover_shape">צורת העטיפה המונפשת</string>
+    <string name="animated_cover_shape_portrait">3:4 (לאורך)</string>
+    <string name="animated_cover_shape_square">1:1 (מרובע)</string>
     <string name="synced_lyrics">מילות שיר מסונכרנות</string>
     <string name="synced_lyrics_subtitle">מדגיש את המילים בנגן בזמן שהן מושרות</string>
     <string name="lyrics_sources">מקורות מילות שיר</string>

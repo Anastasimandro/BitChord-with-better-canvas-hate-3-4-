@@ -216,6 +216,9 @@
     <string name="disable_blend_effects_subtitle">प्लेयर आइकन, टेक्स्ट और डार्क मेनू को आर्टवर्क के रंग में रंगने के बजाय सादे सफ़ेद में दिखाता है</string>
     <string name="full_screen_cover_art">फ़ुल-स्क्रीन कवर आर्ट</string>
     <string name="animated_cover_art">एनिमेटेड कवर आर्ट</string>
+    <string name="animated_cover_shape">एनिमेटेड कवर का आकार</string>
+    <string name="animated_cover_shape_portrait">3:4 (पोर्ट्रेट)</string>
+    <string name="animated_cover_shape_square">1:1 (वर्ग)</string>
     <string name="synced_lyrics">सिंक किए गए लिरिक्स</string>
     <string name="synced_lyrics_subtitle">गाए जाने के साथ प्लेयर पर शब्दों को हाइलाइट करता है</string>
     <string name="lyrics_sources">लिरिक्स के स्रोत</string>

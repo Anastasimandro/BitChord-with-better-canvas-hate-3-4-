@@ -24,6 +24,12 @@ import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.data.model.VersionPair
 import com.music.bitchord.data.model.VersionTimeMap
 import com.music.bitchord.data.model.WatchTarget
+import com.music.bitchord.data.model.isReleaseWord
+import com.music.bitchord.data.model.isTally
+import com.music.bitchord.data.model.isTypeWord
+import com.music.bitchord.data.model.normalizeTypeToken
+import com.music.bitchord.data.model.stripTypeSegments
+import com.music.bitchord.data.model.typeOf
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -713,13 +719,15 @@ object InnertubeParser {
                     .o("text").runs().takeIf { it.matches(DURATION) }
             }
         // On the "All" tab the first segment is the row type ("Song", "Video"),
-        // not the artist — skip those so the subtitle reads like a credit.
-        val rowType = parts.firstOrNull { it.lowercase(Locale.ROOT) in TYPE_WORDS }?.lowercase(Locale.ROOT)
+        // not the artist — skip those so the subtitle reads like a credit. The
+        // label is localised with the request's `hl`, so it is recognised by
+        // the word table rather than by an English spelling.
+        val rowType = parts.firstNotNullOfOrNull { typeOf(it) }
         // A track row on an album lists its play count where a search row
         // lists the artist, so a segment that reads as a tally is no credit.
         val artist = parts.firstOrNull {
-            !it.matches(DURATION) && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY)
-        }
+            !it.matches(DURATION) && !isTypeWord(it) && !isTally(it)
+        }?.let(::stripTypeSegments)
 
         // The artist/album names in the subtitle carry browse endpoints; pull
         // them out so the long-press menu can open those pages.
@@ -800,7 +808,10 @@ object InnertubeParser {
         return Song(
             videoId = videoId,
             title = title,
-            artist = renderer.o("secondTitle").runs().takeIf { it.isNotBlank() }
+            artist = renderer.o("secondTitle").runs()
+                .takeIf { it.isNotBlank() }
+                ?.let(::stripTypeSegments)
+                ?.takeIf { it.isNotBlank() }
                 ?: show
                 ?: "Unknown artist",
             thumbnailUrl = renderer.o("thumbnail").o("musicThumbnailRenderer")
@@ -820,12 +831,13 @@ object InnertubeParser {
      */
     private fun episodeRuntime(text: String): String? {
         var seconds = 0L
-        RUNTIME_PART.findAll(text).forEach { part ->
+        RUNTIME_PART.findAll(normalizeTypeToken(text)).forEach { part ->
             val count = part.groupValues[1].toLong()
-            seconds += when (part.groupValues[2].lowercase(Locale.ROOT).first()) {
-                'h' -> count * 3_600
-                'm' -> count * 60
-                else -> count
+            val unit = normalizeTypeToken(part.groupValues[2])
+            seconds += count * when (unit) {
+                in HOUR_UNITS -> 3_600
+                in MINUTE_UNITS -> 60
+                else -> 1
             }
         }
         if (seconds == 0L) return null
@@ -863,13 +875,12 @@ object InnertubeParser {
         val subtitle = subtitleRuns.joinToString("") { it.s("text").orEmpty() }
         val parts = subtitle.split(" • ").filter { it.isNotBlank() }
         val duration = parts.lastOrNull()?.takeIf { it.matches(DURATION) }
-        val rowType = parts.firstOrNull { it.lowercase(Locale.ROOT) in TYPE_WORDS }
-            ?.lowercase(Locale.ROOT)
+        val rowType = parts.firstNotNullOfOrNull { typeOf(it) }
         val credits = creditsOf(subtitleRuns)
         val creditedArtists = artistNamesFromRuns(subtitleRuns)
         val artist = parts.firstOrNull {
-            !it.matches(DURATION) && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY)
-        }
+            !it.matches(DURATION) && !isTypeWord(it) && !isTally(it)
+        }?.let(::stripTypeSegments)
         val thumbnails = renderer.o("thumbnail").o("musicThumbnailRenderer")
             .o("thumbnail").a("thumbnails")
 
@@ -1063,7 +1074,16 @@ object InnertubeParser {
         } ?: return null
         return artistGroup.mapIndexedNotNull { index, run ->
             if (index % 2 != 0) return@mapIndexedNotNull null
-            run.s("text")?.trim()?.takeIf { it.isNotBlank() }
+            val pageType = run.o("navigationEndpoint").o("browseEndpoint")
+                .o("browseEndpointContextSupportedConfigs")
+                .o("browseEndpointContextMusicConfig").s("pageType").orEmpty()
+            // A run in this group that links somewhere other than an artist
+            // page is not a credit, even when it sits at a name position. This
+            // is what keeps a linked album run ("Ken Carson, Álbum") out of the
+            // byline; an unlinked name has no pageType and is kept.
+            if (pageType.isNotEmpty() && "ARTIST" !in pageType) return@mapIndexedNotNull null
+            run.s("text")?.trim()
+                ?.takeIf { it.isNotBlank() && !isTypeWord(it) && !isTally(it) }
         }.distinct().joinToString(", ").ifBlank { null }
     }
 
@@ -1093,7 +1113,7 @@ object InnertubeParser {
         val parts = lines.flatMap { line ->
             line.joinToString("") { it.s("text").orEmpty() }.split(" • ", " · ").map(String::trim)
         }
-        if (parts.none { it.lowercase(Locale.ROOT) in RELEASE_WORDS }) return Credits()
+        if (parts.none { isReleaseWord(it) }) return Credits()
 
         val credits = creditsOf(lines.flatten())
         val creditedArtists = lines.firstNotNullOfOrNull(::artistNamesFromRuns)
@@ -1101,9 +1121,9 @@ object InnertubeParser {
         // An artist YouTube has no page for is named in the same line without
         // a link to follow, leaving the name as the only thing to go on.
         val name = parts.firstOrNull {
-            it.isNotBlank() && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY) &&
+            it.isNotBlank() && !isTypeWord(it) && !isTally(it) &&
                 !it.matches(YEAR) && !it.matches(DURATION)
-        }
+        }?.let(::stripTypeSegments)
         return credits.copy(artistName = name)
     }
 
@@ -1343,10 +1363,15 @@ object InnertubeParser {
         // the leading runs before the first bullet are the credit.
         val bylineRuns = renderer.o("longBylineText").a("runs").orEmpty()
         val byline = bylineRuns.map { it.s("text").orEmpty() }
-        val artist = byline.takeWhile { !it.contains("•") }.joinToString("").trim()
         // Those same runs link out to the artist and album pages, which is
         // how a track started from the queue knows where it came from.
         val credits = creditsOf(bylineRuns)
+        val rawArtist = byline.takeWhile { !it.contains("•") }.joinToString("").trim()
+        // The leading segment can be a localised label on rows whose artist
+        // link is missing ("Álbum • Ken Carson"). A label is not a credit.
+        val artist = stripTypeSegments(rawArtist)
+            .ifBlank { credits.artistName.orEmpty() }
+            .ifBlank { "Unknown artist" }
         return Song(
             videoId = videoId,
             title = title,
@@ -1354,7 +1379,7 @@ object InnertubeParser {
             thumbnailUrl = renderer.o("thumbnail").a("thumbnails").best(),
             durationText = renderer.o("lengthText").runs().takeIf { it.isNotBlank() },
             artistId = credits.artistId,
-            artists = completeArtistCredits(artist.orEmpty(), credits.artists),
+            artists = completeArtistCredits(artist, credits.artists),
             albumId = credits.albumId,
             albumName = credits.albumName,
             // A catalogue track is credited "Artist • Album • Year"; the
@@ -1704,9 +1729,10 @@ object InnertubeParser {
      */
     fun artistFromSubtitle(subtitle: String): String {
         val parts = subtitle.split(" • ").map(String::trim).filter { it.isNotBlank() }
-        return parts.firstOrNull {
-            it.lowercase() !in TYPE_WORDS && !it.matches(TALLY) && !it.matches(DURATION)
+        val credit = parts.firstOrNull {
+            !isTypeWord(it) && !isTally(it) && !it.matches(DURATION)
         } ?: subtitle
+        return stripTypeSegments(credit)
     }
 
     /**
@@ -1728,32 +1754,43 @@ object InnertubeParser {
         }
 
     private val DURATION = Regex("""\d+:\d{2}""")
-    /** One unit of an episode's runtime — "2 hr", "43 min", "10 sec". */
-    private val RUNTIME_PART = Regex("""(\d+)\s*(hours?|hr|min|sec)""", RegexOption.IGNORE_CASE)
-    private val YEAR = Regex("""\d{4}""")
     /**
-     * A counted quantity rather than a name — "12.4M plays", "13 songs",
-     * "1 hour, 4 minutes". Deliberately narrow: it has to leave "21 Savage"
-     * and "50 Cent" alone, so a number only disqualifies a segment when it is
-     * counting one of the words YouTube counts with.
+     * One unit of an episode's runtime — "2 hr", "43 min", "10 sec", and the
+     * same units as YouTube writes them when the request asks for Spanish,
+     * German, Russian, Japanese, and so on. Matched against folded text, so
+     * "horas", "Stunden" and "phút" are the same shapes their accents fold to.
      */
-    private val TALLY = Regex(
-        """[\d.,]+\s*[KMB]?\s+(plays|views|likes|songs|tracks|subscribers|""" +
-            """hours?|minutes?|seconds?)\b.*""",
+    private val RUNTIME_PART = Regex(
+        """(\d+)\s*(hours?|hrs?|h|heures?|heure|stunden?|stunde|std|""" +
+            """godzin(?:y|a)?|jam|horas?|hora|часов|часа|час|小时|小時|時間|""" +
+            """שעה|שעות|ore|ora|saat|ชั่วโมง|gio|시간|""" +
+            """minutes?|mins?|min|minutos?|minuto|minuten?|minute|""" +
+            """minut(?:y|a)?|menit|मिनट|分|分鐘|минут(?:ы|а)?|דקה|דקות|""" +
+            """minuti|minuto|dakika|นาที|phut|분|""" +
+            """seconds?|secs?|sec|segundos?|segundo|secondes?|seconde|""" +
+            """sekunden?|sekunde|sek|sekund(?:y|a)?|detik|सेकंड|秒|""" +
+            """секунд(?:ы|а)?|שנייה|שניות|secondi|secondo|saniye|วินาที|giay|초)""",
         RegexOption.IGNORE_CASE,
     )
-    /** Header words that mark a page as a release, whose rows share its credit. */
-    private val RELEASE_WORDS = setOf("album", "single", "ep")
+    private val HOUR_UNITS = setOf(
+        "h", "hr", "hrs", "hour", "hours", "heure", "heures", "stunde",
+        "stunden", "std", "godzin", "godziny", "godzina", "jam", "hora",
+        "horas", "час", "часа", "часов", "小时", "小時", "時間", "שעה",
+        "שעות", "ora", "ore", "saat", "ชั่วโมง", "gio", "시간",
+    )
+    private val MINUTE_UNITS = setOf(
+        "m", "min", "mins", "minute", "minutes", "minuto", "minutos",
+        "minuten", "minut", "minuty", "minuta", "menit", "मिनट", "分",
+        "分鐘", "минут", "минуты", "минута", "דקה", "דקות", "minuti",
+        "dakika", "นาที", "phut", "분",
+    )
+    private val YEAR = Regex("""\d{4}""")
     private val HEADER_RENDERERS = listOf(
         "musicResponsiveHeaderRenderer",
         "musicDetailHeaderRenderer",
     )
     /** Header lines that name the artist, in either header shape. */
     private val HEADER_CREDIT_LINES = listOf("straplineTextOne", "subtitle")
-    private val TYPE_WORDS = setOf(
-        "song", "video", "album", "single", "ep", "artist",
-        "playlist", "podcast", "episode",
-    )
     /**
      * Flags a browse card as video content: "50 videos" in a subtitle
      * (instead of "50 songs"), or the word right in a title like

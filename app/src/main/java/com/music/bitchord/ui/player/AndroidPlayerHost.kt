@@ -64,6 +64,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val audioQualityCellular get() = AppSettings.audioQualityCellular
         override val audioQualityWifi get() = AppSettings.audioQualityWifi
         override val canvasOverCellular get() = AppSettings.canvasOverCellular
+        override val canvasPreferPortrait get() = AppSettings.canvasPreferPortrait
         override val fullBleedArtwork get() = AppSettings.fullBleedArtwork
         override val hideSongStatus get() = AppSettings.hideSongStatus
         override val showQueueHistory get() = AppSettings.showQueueHistory

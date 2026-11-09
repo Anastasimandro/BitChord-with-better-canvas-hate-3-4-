@@ -211,6 +211,9 @@
     <string name="disable_blend_effects_subtitle">Menampilkan ikon, teks, dan menu gelap pemutar dalam warna putih polos, tanpa diwarnai sampul</string>
     <string name="full_screen_cover_art">Sampul layar penuh</string>
     <string name="animated_cover_art">Sampul animasi</string>
+    <string name="animated_cover_shape">Bentuk sampul animasi</string>
+    <string name="animated_cover_shape_portrait">3:4 (potret)</string>
+    <string name="animated_cover_shape_square">1:1 (persegi)</string>
     <string name="synced_lyrics">Lirik tersinkron</string>
     <string name="synced_lyrics_subtitle">Menyorot kata-kata di pemutar saat dinyanyikan</string>
     <string name="lyrics_sources">Sumber lirik</string>

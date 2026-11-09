@@ -252,6 +252,9 @@
     <string name="player_theme_simple_subtitle">Ảnh bìa làm mờ phía sau toàn bộ trình phát</string>
     <string name="player_theme_legacy_subtitle">Mang lại các đốm màu chuyển động phía sau trình phát từ phiên bản 1.5</string>
     <string name="animated_cover_art">Ảnh bìa động</string>
+    <string name="animated_cover_shape">Hình dạng bìa động</string>
+    <string name="animated_cover_shape_portrait">3:4 (dọc)</string>
+    <string name="animated_cover_shape_square">1:1 (vuông)</string>
     <string name="synced_lyrics">Lời bài hát đồng bộ</string>
     <string name="synced_lyrics_subtitle">Làm sáng các từ trên trình phát khi đang được hát</string>
     <string name="lyrics_sources">Nguồn lời bài hát</string>
