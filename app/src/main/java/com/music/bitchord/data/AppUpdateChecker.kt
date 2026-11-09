@@ -201,6 +201,10 @@ object AppUpdateChecker {
      * launched anyway and shows its own "not allowed" prompt with a way in.
      */
     fun installApk(context: Context, file: File) {
+        if (!file.exists() || file.length() == 0L) {
+            _download.value = DownloadState.Failed("Downloaded APK is empty or missing")
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
         ) {
@@ -215,7 +219,7 @@ object AppUpdateChecker {
         }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         context.startActivity(
-            Intent(Intent.ACTION_INSTALL_PACKAGE)
+            Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uri, "application/vnd.android.package-archive")
                 .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
                 .putExtra(Intent.EXTRA_RETURN_RESULT, true)

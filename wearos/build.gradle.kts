@@ -104,7 +104,7 @@ android {
             )
             // Null without a keystore, like the phone: an unsigned APK rather
             // than a build failure.
-            signingConfig = signingConfigs.findByName("release")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

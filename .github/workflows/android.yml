@@ -127,12 +127,17 @@ jobs:
                 echo "keyAlias=${{ secrets.KEY_ALIAS }}"
                 echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
               } > keystore.properties
-              echo "SIGNING=signed" >> $GITHUB_ENV
+              echo "SIGNING=release" >> $GITHUB_ENV
             else
-              echo "SIGNING=unsigned" >> $GITHUB_ENV
+              echo "SIGNING=fallback-debug" >> $GITHUB_ENV
             fi
           else
-            echo "SIGNING=unsigned" >> $GITHUB_ENV
+            echo "SIGNING=fallback-debug" >> $GITHUB_ENV
+          fi
+
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Validate Version Consistency
@@ -276,12 +281,17 @@ jobs:
                 echo "keyAlias=${{ secrets.KEY_ALIAS }}"
                 echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
               } > keystore.properties
-              echo "SIGNING=signed" >> $GITHUB_ENV
+              echo "SIGNING=release" >> $GITHUB_ENV
             else
-              echo "SIGNING=unsigned" >> $GITHUB_ENV
+              echo "SIGNING=fallback-debug" >> $GITHUB_ENV
             fi
           else
-            echo "SIGNING=unsigned" >> $GITHUB_ENV
+            echo "SIGNING=fallback-debug" >> $GITHUB_ENV
+          fi
+
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Determine Release Tag
