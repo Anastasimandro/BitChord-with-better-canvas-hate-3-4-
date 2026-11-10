@@ -190,7 +190,7 @@ private fun WatchRow(
     )
 }
 
-/** The trailing action, as the App Store draws GET and UPDATE: a small filled capsule. */
+/** The trailing action: a small filled capsule. */
 @Composable
 private fun ActionPill(text: String, onClick: () -> Unit) {
     Box(
@@ -201,7 +201,10 @@ private fun ActionPill(text: String, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
         Text(
-            text = text.uppercase(),
+            // As the resource wrote it — casing belongs to the resource, not
+            // to a transform that flattens the translator's choice and every
+            // language's own capitalisation rules with it.
+            text = text,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onPrimary,
         )

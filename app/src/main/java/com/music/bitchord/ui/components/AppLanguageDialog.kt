@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
+import com.music.bitchord.data.LocaleTags
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.addon.AddonAuth
 import dev.chrisbanes.haze.HazeState
@@ -49,43 +50,90 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import java.util.Locale
 
-/** Language tag paired with its display-name string.
+/** Language tag paired with an optional display-name override.
  *
  * Tags carry a region (`zh-CN` / `zh-TW`, not bare `zh-Hans` / `zh-Hant`):
  * Android Views understand script qualifiers (`values-b+zh+Hant`) but the
  * shared Compose resources only match language + region, so a region-less
  * script tag shows Traditional in Settings and Simplified on the player.
  * [LocaleTags.normalizeAppTag] maps both forms to the same script downstream.
+ *
+ * [nativeName] is the row's own-language spelling when CLDR's is not the one
+ * this app shows — blank means derive it at runtime, see [selfDisplayName].
  */
-data class AppLanguage(val tag: String, val nameRes: Int)
+data class AppLanguage(val tag: String, val nativeName: String = "")
 
+/**
+ * The catalog, and the single canonical list of languages the app offers.
+ *
+ * The resource system reads it (LocaleStringsTest, LocalizationTest and
+ * locales_config.xml are all checked against it), so a language is added here
+ * and nowhere else. There are no pointer resources per language ("English",
+ * "Spanish", …): names come from CLDR at runtime — a language's own spelling
+ * and its spelling in the current language — because a name that needs a
+ * translation is one more key to keep in step in eighteen files, for data the
+ * platform already carries.
+ */
 val SUPPORTED_LANGUAGES = listOf(
-    AppLanguage("en", R.string.english),
-    AppLanguage("es", R.string.spanish),
-    AppLanguage("fr", R.string.french),
-    AppLanguage("de", R.string.german),
-    AppLanguage("pl", R.string.polish),
-    AppLanguage("pt", R.string.portuguese),
-    AppLanguage("id", R.string.indonesian),
-    AppLanguage("hi", R.string.hindi),
-    AppLanguage("ja", R.string.japanese),
-    AppLanguage("ru", R.string.russian),
-    AppLanguage("zh-CN", R.string.chinese_simplified),
-    AppLanguage("zh-TW", R.string.chinese_traditional),
-    AppLanguage("he", R.string.hebrew),
-    AppLanguage("it", R.string.italian),
-    AppLanguage("tr", R.string.turkish),
-    AppLanguage("th", R.string.thai),
-    AppLanguage("vi", R.string.vietnamese),
-    AppLanguage("ko", R.string.korean),
+    AppLanguage("en"),
+    AppLanguage("es", "Español"),
+    AppLanguage("fr", "Français"),
+    AppLanguage("de"),
+    AppLanguage("pl", "Polski"),
+    AppLanguage("pt", "Português"),
+    AppLanguage("id"),
+    AppLanguage("hi"),
+    AppLanguage("ja"),
+    AppLanguage("ru", "Русский"),
+    AppLanguage("zh-CN", "简体中文"),
+    AppLanguage("zh-TW", "繁體中文"),
+    AppLanguage("he"),
+    AppLanguage("it", "Italiano"),
+    AppLanguage("tr"),
+    AppLanguage("th"),
+    AppLanguage("vi"),
+    AppLanguage("ko"),
 )
 
-fun languageDisplayNameRes(languageTag: String): Int {
-    val norm = com.music.bitchord.data.LocaleTags.normalizeAppTag(languageTag)
-    return SUPPORTED_LANGUAGES.firstOrNull {
-        com.music.bitchord.data.LocaleTags.normalizeAppTag(it.tag) == norm
-    }?.nameRes ?: R.string.english
-}
+/**
+ * The language's name in its own language — "Deutsch", "日本語" — as the row
+ * leads with it.
+ *
+ * Most entries trust CLDR's self-name, which reads exactly as shipped here
+ * (verified against `Locale.forLanguageTag(tag).getDisplayLanguage(...)` for
+ * English, German and Japanese before dropping their literals). The eight
+ * overrides exist for the two ways CLDR's is not the right spelling for a
+ * standalone row: languages whose own orthography writes a mid-sentence name
+ * in lower case — "español", "français", "polski", "português", "русский",
+ * "italiano" — where the list keeps the capitalised standalone form; and the
+ * two Chinese tags, whose CLDR display language is "中文" for both and would
+ * lose the Simplified/Traditional distinction the row is there to show.
+ */
+fun AppLanguage.selfDisplayName(): String =
+    nativeName.ifBlank {
+        val locale = Locale.forLanguageTag(tag)
+        locale.getDisplayLanguage(locale)
+    }
+
+/**
+ * The language's name in [displayLocale]'s spelling — the subtitle under a
+ * row: "Spanish" while the app runs in English, "español" while in Spanish.
+ * Falls back to the tag itself when there is no name to show.
+ */
+fun languageDisplayName(languageTag: String, displayLocale: Locale = Locale.getDefault()): String =
+    Locale.forLanguageTag(LocaleTags.normalizeAppTag(languageTag))
+        .getDisplayLanguage(displayLocale)
+        .ifBlank { languageTag }
+
+/**
+ * [languageDisplayName], keeping script and region — "Chinese (Simplified)",
+ * not "中文". For a summary line that must tell the two Chinese catalogues
+ * apart where the language picker's own rows already do.
+ */
+fun languageDisplayNameDetailed(languageTag: String, displayLocale: Locale = Locale.getDefault()): String =
+    Locale.forLanguageTag(LocaleTags.normalizeAppTag(languageTag))
+        .getDisplayName(displayLocale)
+        .ifBlank { languageTag }
 
 /** How much of the screen the list may take before it scrolls inside the card. */
 private val LANGUAGE_LIST_MAX_HEIGHT = 340.dp
@@ -202,12 +250,17 @@ fun AppLanguageDialog(
             // [TranslationLanguageDialog] — sixteen rows is short enough not
             // to need that dialog's filter field, but still taller than the
             // card should get to stay centred on a phone.
+            // The subtitles are the names in the app's current language — the
+            // one the dialog is choosing — so the list is read against the
+            // language it leads to.
+            val displayLocale = Locale.forLanguageTag(currentLanguage)
             LazyColumn(modifier = Modifier.heightIn(max = LANGUAGE_LIST_MAX_HEIGHT)) {
                 items(SUPPORTED_LANGUAGES, key = { it.tag }) { language ->
                     AlertRule()
                     LanguageRow(
                         language = language,
-                        selected = com.music.bitchord.data.LocaleTags.normalizeAppTag(language.tag) == currentLanguage,
+                        displayLocale = displayLocale,
+                        selected = LocaleTags.normalizeAppTag(language.tag) == currentLanguage,
                         onClick = {
                             AppCompatDelegate.setApplicationLocales(
                                 LocaleListCompat.forLanguageTags(language.tag),
@@ -222,9 +275,16 @@ fun AppLanguageDialog(
 }
 
 @Composable
-private fun LanguageRow(language: AppLanguage, selected: Boolean, onClick: () -> Unit) {
+private fun LanguageRow(language: AppLanguage, displayLocale: Locale, selected: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    // Both names read off the platform at render time: the row's own language
+    // up top, and — when it reads differently — the same language in the
+    // language the dialog is being read in. No per-language pointer resources,
+    // so a new entry in [SUPPORTED_LANGUAGES] needs no new keys at all.
+    val nativeName = language.selfDisplayName()
+    val localizedName = languageDisplayName(language.tag, displayLocale)
+    val hasDistinctLocalizedName = !localizedName.equals(nativeName, ignoreCase = true)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -240,12 +300,20 @@ private fun LanguageRow(language: AppLanguage, selected: Boolean, onClick: () ->
             .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = stringResource(language.nameRes),
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = nativeName,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (hasDistinctLocalizedName) {
+                Text(
+                    text = localizedName,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, lineHeight = 15.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                )
+            }
+        }
         if (selected) {
             Icon(
                 imageVector = Icons.Rounded.Check,

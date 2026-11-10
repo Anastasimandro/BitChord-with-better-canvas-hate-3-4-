@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connecting">正在連接…</string>
+    <string name="no_phone_title">手機未連接</string>
+    <string name="no_phone_body">在手機上開啟 BitChord，並將其放在手錶附近。</string>
+    <string name="retry">重試</string>
+    <string name="nothing_playing">未在播放</string>
+    <string name="nothing_playing_body">在手機上的 BitChord 中播放一些內容。</string>
+    <string name="resume">繼續</string>
+    <string name="up_next">接下來</string>
+    <string name="queue_empty">接下來沒有內容</string>
+    <string name="loading">載入中…</string>
+    <string name="playing_now">正在播放</string>
+    <string name="more">更多</string>
+    <string name="shuffle">隨機播放</string>
+    <string name="repeat">重複</string>
+    <string name="repeat_off">關閉</string>
+    <string name="repeat_all">全部</string>
+    <string name="repeat_one">單曲</string>
+    <string name="on">開</string>
+    <string name="off">關閉</string>
+    <string name="love">喜歡</string>
+    <string name="loved">已喜歡</string>
+    <string name="volume">音量</string>
+    <string name="on_phone">在手機上</string>
+    <string name="play">播放</string>
+    <string name="pause">暫停</string>
+    <string name="next">下一首</string>
+    <string name="previous">上一首</string>
+    <string name="output">輸出</string>
+    <string name="this_watch">此手錶</string>
+    <string name="watch_speaker">手錶揚聲器或耳機</string>
+    <string name="on_phone_output">在手機上</string>
+    <string name="phone_speaker">手機揚聲器</string>
+    <string name="wired_headphones">有線耳機</string>
+    <string name="usb_audio">USB 音訊</string>
+    <string name="hdmi">HDMI</string>
+    <string name="other_output">其他輸出</string>
+    <string name="moving_to_watch">正在切換到手錶…</string>
+    <string name="update_channel">更新</string>
+    <string name="update_ready">BitChord 更新已就緒</string>
+    <string name="update_tap">點按以從手機安裝更新。</string>
+</resources>

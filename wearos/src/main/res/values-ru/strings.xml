@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connecting">Подключение…</string>
+    <string name="no_phone_title">Телефон не подключён</string>
+    <string name="no_phone_body">Откройте BitChord на телефоне и держите его рядом с часами.</string>
+    <string name="retry">Повторить попытку</string>
+    <string name="nothing_playing">Ничего не воспроизводится</string>
+    <string name="nothing_playing_body">Включите что-нибудь в BitChord на телефоне.</string>
+    <string name="resume">Продолжить</string>
+    <string name="up_next">Далее</string>
+    <string name="queue_empty">Далее ничего нет</string>
+    <string name="loading">Загрузка…</string>
+    <string name="playing_now">Сейчас играет</string>
+    <string name="more">Ещё</string>
+    <string name="shuffle">Перемешать</string>
+    <string name="repeat">Повторять</string>
+    <string name="repeat_off">Выкл</string>
+    <string name="repeat_all">Все</string>
+    <string name="repeat_one">Один</string>
+    <string name="on">Вкл.</string>
+    <string name="off">Выкл</string>
+    <string name="love">Нравится</string>
+    <string name="loved">В избранном</string>
+    <string name="volume">Громкость</string>
+    <string name="on_phone">На телефоне</string>
+    <string name="play">Играть</string>
+    <string name="pause">Пауза</string>
+    <string name="next">Далее</string>
+    <string name="previous">Назад</string>
+    <string name="output">Выход</string>
+    <string name="this_watch">Эти часы</string>
+    <string name="watch_speaker">Динамик или наушники часов</string>
+    <string name="on_phone_output">На телефоне</string>
+    <string name="phone_speaker">Динамик телефона</string>
+    <string name="wired_headphones">Проводные наушники</string>
+    <string name="usb_audio">USB-аудио</string>
+    <string name="hdmi">HDMI</string>
+    <string name="other_output">Другой выход</string>
+    <string name="moving_to_watch">Переключение на часы…</string>
+    <string name="update_channel">Обновления</string>
+    <string name="update_ready">Обновление BitChord готово</string>
+    <string name="update_tap">Нажмите, чтобы установить обновление с телефона.</string>
+</resources>

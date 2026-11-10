@@ -43,7 +43,11 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Tests
-        run: ./gradlew testDevDebugUnitTest
+        # The full unit-test run carries the i18n parity tests
+        # (LocaleStringsTest, LocalizationTest — see the i18nParityTest task
+        # in app/build.gradle.kts); localeCoverage prints the per-language
+        # gap next to their results.
+        run: ./gradlew testDevDebugUnitTest :app:localeCoverage
 
       - name: Build the dev APK
         run: ./gradlew assembleDevDebug

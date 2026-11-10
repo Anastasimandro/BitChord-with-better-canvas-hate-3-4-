@@ -113,73 +113,112 @@ private const val SETTLE_MILLIS = 1_200L
  */
 data class HeadlineRun(val text: String, val bold: Boolean)
 
-private fun runs(vararg parts: Pair<String, Boolean>): List<HeadlineRun> =
-    parts.map { HeadlineRun(it.first, it.second) }
+/**
+ * Where an emphasised run sits in a whole-sentence headline resource: `%1$s`,
+ * `%2$s`, … The templates are matched on the positional form so a translation
+ * may also reorder its placeholders — which is the point of writing the
+ * sentences whole (see [headlineRuns]).
+ */
+// The brackets around the $ are what keep Kotlin from reading it as the start
+// of a string template; the pattern itself is the plain `%\d+$s`.
+private val BOLD_PLACEHOLDER = Regex("%\\d+[$]s")
+
+/**
+ * Builds a card headline out of ONE whole-sentence resource, emphasising
+ * whatever its placeholders stand for.
+ *
+ * One resource per case, not translated fragments glued together in code,
+ * because fragments are not reorderable: `"You spent " + "1,284 minutes" +
+ * " with music."` hard-codes English word order, and Japanese, Korean, Hebrew
+ * and Russian cut the same sentence somewhere else entirely — the old
+ * fragments could only ever read as English-shaped sentences wearing
+ * translated words. With the sentence whole in the resource, the translator
+ * owns the word order, the spaces and the full stop; this function's only job
+ * is recovering *where* the emphasised run landed after translation, which is
+ * presentation, not wording. The emphasised part is the placeholder's text
+ * itself — a figure, or the feature's brand word — so run boundaries and
+ * sentence can never disagree.
+ *
+ * Tolerant of a translation carrying fewer or more placeholders than there
+ * are [bold] parts: a mismatch degrades to plain text rather than crashing a
+ * share card at draw time, and the resource parity test catches the real
+ * damage where it belongs — at build time.
+ */
+private fun Context.headlineRuns(resId: Int, vararg bold: String): List<HeadlineRun> {
+    val pieces = getString(resId).split(BOLD_PLACEHOLDER)
+    val runs = buildList {
+        add(HeadlineRun(pieces.first(), bold = false))
+        pieces.drop(1).forEachIndexed { index, piece ->
+            add(HeadlineRun(bold.getOrElse(index) { "" }, bold = true))
+            add(HeadlineRun(piece, bold = false))
+        }
+    }
+    return runs.filter { it.text.isNotEmpty() }
+}
 
 /** The sentence at the top of [page]. */
 fun ReplaySummary.storyHeadline(context: Context, page: ReplayStoryPage): List<HeadlineRun> = when (page) {
-    ReplayStoryPage.INTRO -> runs(
-        context.getString(R.string.replay_intro_start) to false,
-        " " to false,
-        "Replay" to true,
-        " " to false,
-        context.getString(R.string.replay_intro_end) to false,
-    )
-    ReplayStoryPage.MINUTES -> runs(
-        context.getString(R.string.replay_minutes_start) to false,
-        " " to false,
-        context.resources.getQuantityString(
-            R.plurals.replay_minutes_unit,
-            formatMinutes(totalMs).replace(",", "").toIntOrNull() ?: 0,
-            formatMinutes(totalMs),
-        ) to true,
-        " " to false,
-        context.getString(R.string.replay_minutes_end) to false,
-    )
-    ReplayStoryPage.SONGS -> runs(
-        context.getString(R.string.replay_songs_start) to false,
-        " " to false,
-        context.replayCount(totalPlays, R.plurals.replay_song_count) to true,
-        " " to false,
-        (if (period == ReplayPeriod.THIS_WEEK) context.getString(R.string.replay_songs_end_week) else context.getString(R.string.replay_songs_end)) to false,
-    )
-    ReplayStoryPage.ARTISTS -> runs(
-        (if (period == ReplayPeriod.THIS_WEEK) context.getString(R.string.replay_artist_start_week) else context.getString(R.string.replay_artist_start)) to false,
-        " " to false,
-        context.getString(R.string.replay_artist_focus) to true,
-        " " to false,
-        context.getString(R.string.replay_artist_end) to false,
-    )
-    ReplayStoryPage.ALBUMS -> runs(
-        context.getString(R.string.replay_album_start) to false,
-        " " to false,
-        context.getString(R.string.replay_album_focus) to true,
-        " " to false,
-        context.getString(R.string.replay_album_end) to false,
-    )
-    ReplayStoryPage.GENRES -> runs(
-        context.getString(R.string.replay_genre_start) to false,
-        " " to false,
-        context.getString(R.string.replay_genre_focus) to true,
-        " " to false,
-        context.getString(R.string.replay_genre_end) to false,
-    )
-    ReplayStoryPage.HABITS -> runs(
-        context.getString(R.string.replay_habits_start) to false,
-        " " to false,
-        context.replayCount(distinctSongs, R.plurals.replay_song_count) to true,
-        " " to false,
-        context.getString(R.string.replay_habits_middle) to false,
-        " " to false,
-        context.replayCount(distinctArtists, R.plurals.replay_artist_count) to true,
-        "." to false,
-    )
-    ReplayStoryPage.SUMMARY -> runs(
-        context.getString(R.string.replay_summary_start) to false,
-        " " to false,
-        if (period == ReplayPeriod.THIS_WEEK) context.getString(R.string.replay_summary_end_week) to true else label to true,
-        if (period == ReplayPeriod.THIS_WEEK) " in music." to false else " in music." to false,
-    )
+    ReplayStoryPage.INTRO ->
+        // "Replay" is the feature's brand word rather than copy, so it travels
+        // untranslated in every catalogue — exactly what a placeholder is for.
+        context.headlineRuns(R.string.replay_story_intro, "Replay")
+    ReplayStoryPage.MINUTES -> {
+        // The plural's selector gets the number itself, never a parse-back of
+        // the formatted figure: formatMinutes() groups for reading, and
+        // un-formatting that (stripping separators) breaks on every locale
+        // whose separator is not a comma. The figure inside the sentence
+        // keeps the app-wide grouping (see [grouped]).
+        val minutes = totalMs / 60_000
+        context.headlineRuns(
+            R.string.replay_story_minutes,
+            context.resources.getQuantityString(
+                R.plurals.replay_minutes_unit,
+                // An int holds a lifetime of listening: 2^31 minutes is about
+                // 4,085 years, and the summary starts at the first played song.
+                minutes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                grouped(minutes),
+            ),
+        )
+    }
+    ReplayStoryPage.SONGS ->
+        context.headlineRuns(
+            if (period == ReplayPeriod.THIS_WEEK) {
+                R.string.replay_story_songs_week
+            } else {
+                R.string.replay_story_songs
+            },
+            context.replayCount(totalPlays, R.plurals.replay_song_count),
+        )
+    ReplayStoryPage.ARTISTS ->
+        context.headlineRuns(
+            if (period == ReplayPeriod.THIS_WEEK) {
+                R.string.replay_story_artists_week
+            } else {
+                R.string.replay_story_artists
+            },
+            context.getString(R.string.replay_artist_focus),
+        )
+    ReplayStoryPage.ALBUMS ->
+        context.headlineRuns(R.string.replay_story_albums, context.getString(R.string.replay_album_focus))
+    ReplayStoryPage.GENRES ->
+        context.headlineRuns(R.string.replay_story_genres, context.getString(R.string.replay_genre_focus))
+    ReplayStoryPage.HABITS ->
+        context.headlineRuns(
+            R.string.replay_story_habits,
+            context.replayCount(distinctSongs, R.plurals.replay_song_count),
+            context.replayCount(distinctArtists, R.plurals.replay_artist_count),
+        )
+    ReplayStoryPage.SUMMARY ->
+        context.headlineRuns(
+            R.string.replay_story_summary,
+            // The week has no figure to lead with, so the period's own word is
+            // the emphasised part. Every other stretch leads with its label,
+            // said in the app's language rather than the device's — which is
+            // what [localizedLabel] reads and what the old code skipped, so
+            // the month on this card came out English everywhere.
+            if (period == ReplayPeriod.THIS_WEEK) context.getString(R.string.replay_summary_end_week)
+            else localizedLabel(context),
+        )
 }
 
 fun ReplayPeriod.localizedChip(context: Context): String = when (this) {
@@ -198,7 +237,9 @@ fun ReplayPeriod.localizedTab(context: Context): String = when (this) {
 }
 
 fun ReplaySummary.localizedLabel(context: Context): String = when (period) {
-    ReplayPeriod.THIS_WEEK -> "This week"
+    // The week's chip copy, reused: one sentence for the same period rather
+    // than a second literal only this label could not translate.
+    ReplayPeriod.THIS_WEEK -> context.getString(R.string.replay_this_week)
     ReplayPeriod.THIS_MONTH -> DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
         .format(LocalDate.now())
         .replaceFirstChar { it.titlecase(Locale.getDefault()) }

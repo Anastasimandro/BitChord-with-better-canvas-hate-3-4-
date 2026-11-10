@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connecting">מתחבר…</string>
+    <string name="no_phone_title">הטלפון לא מחובר</string>
+    <string name="no_phone_body">פתח את BitChord בטלפון והחזק אותו ליד השעון.</string>
+    <string name="retry">נסה שוב</string>
+    <string name="nothing_playing">לא מתנגן דבר</string>
+    <string name="nothing_playing_body">הפעל משהו ב-BitChord בטלפון.</string>
+    <string name="resume">המשך</string>
+    <string name="up_next">הבא</string>
+    <string name="queue_empty">אין המשך</string>
+    <string name="loading">טוען…</string>
+    <string name="playing_now">מתנגן כעת</string>
+    <string name="more">עוד</string>
+    <string name="shuffle">ערבוב</string>
+    <string name="repeat">חזור</string>
+    <string name="repeat_off">כבוי</string>
+    <string name="repeat_all">הכול</string>
+    <string name="repeat_one">אחד</string>
+    <string name="on">פועל</string>
+    <string name="off">כבוי</string>
+    <string name="love">לייק</string>
+    <string name="loved">אהבת</string>
+    <string name="volume">עוצמת שמע</string>
+    <string name="on_phone">בטלפון</string>
+    <string name="play">הפעלה</string>
+    <string name="pause">השהה</string>
+    <string name="next">הבא</string>
+    <string name="previous">הקודם</string>
+    <string name="output">פלט</string>
+    <string name="this_watch">השעון הזה</string>
+    <string name="watch_speaker">רמקול או אוזניות של השעון</string>
+    <string name="on_phone_output">בטלפון</string>
+    <string name="phone_speaker">רמקול הטלפון</string>
+    <string name="wired_headphones">אוזניות חוטיות</string>
+    <string name="usb_audio">שמע USB</string>
+    <string name="hdmi">HDMI</string>
+    <string name="other_output">פלט אחר</string>
+    <string name="moving_to_watch">עובר לשעון…</string>
+    <string name="update_channel">עדכונים</string>
+    <string name="update_ready">עדכון BitChord מוכן</string>
+    <string name="update_tap">הקש כדי להתקין את העדכון מהטלפון.</string>
+</resources>

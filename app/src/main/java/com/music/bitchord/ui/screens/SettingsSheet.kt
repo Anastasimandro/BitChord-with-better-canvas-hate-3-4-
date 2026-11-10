@@ -146,7 +146,7 @@ import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import com.music.bitchord.ui.components.PillSegmentedControl
 import com.music.bitchord.ui.components.isGlassSupported
-import com.music.bitchord.ui.components.languageDisplayNameRes
+import com.music.bitchord.ui.components.languageDisplayNameDetailed
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -1806,7 +1806,11 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = SfIcons.Language,
                     title = appLanguageTitle,
-                    subtitle = stringResource(languageDisplayNameRes(selectedLanguage)),
+                    // Named from the platform's own data, script included —
+                    // "Chinese (Simplified)", not a pointer resource — so the
+                    // summary stays correct for a language added to the
+                    // catalog without a new key anywhere.
+                    subtitle = languageDisplayNameDetailed(selectedLanguage),
                     onClick = onAppLanguage,
                 )
             }
@@ -2506,8 +2510,8 @@ internal fun SettingsPageTitle(text: String) {
 }
 
 /**
- * One inset card of rows, with an uppercase header above and an optional
- * plain-language [footer] below. Rows are separated by [RowDivider].
+ * One inset card of rows, with a header above and an optional plain-language
+ * [footer] below. Rows are separated by [RowDivider].
  */
 @Composable
 internal fun SettingsGroup(
@@ -2518,8 +2522,13 @@ internal fun SettingsGroup(
     content: @Composable () -> Unit,
 ) {
     if (header != null) {
+        // Rendered as the resource wrote it. Group headers used to be forced
+        // through uppercase() here, but casing is a wording decision, and
+        // wording belongs in the resource: an uppercasing call flattens every
+        // language's own rules (Turkish loses its dotted İ, German keeps a
+        // ẞ nobody asked for) and takes the choice away from the translator.
         Text(
-            text = header.uppercase(Locale.ROOT),
+            text = header,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(
@@ -2717,7 +2726,10 @@ internal fun SettingsSubRow(
 @Composable
 internal fun Badge(text: String) {
     Text(
-        text = text.uppercase(Locale.ROOT),
+        // As the resource wrote it — casing is wording, and wording belongs
+        // to the resource: uppercasing here flattens the translator's choice
+        // and every language's own capitalisation rules with it.
+        text = text,
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
@@ -2938,7 +2950,10 @@ fun SettingsChoicePage(
                     detail = { stringResource(R.string.quality_hourly, it.detail, it.hourly) },
                     footer = stringResource(
                         R.string.audio_quality_connection,
-                        stringResource(if (wifi) R.string.wifi else R.string.mobile_data).lowercase(Locale.getDefault()),
+                        // Not lowercased: the connection's name is the
+                        // resource's to case — "Wi-Fi" arrives as the
+                        // translator wrote it, mid-sentence or not.
+                        stringResource(if (wifi) R.string.wifi else R.string.mobile_data),
                     ),
                 ) { quality ->
                     // Writes the one ceiling being edited and nothing else —

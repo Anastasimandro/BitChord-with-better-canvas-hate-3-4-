@@ -732,7 +732,7 @@ object ListeningStats {
             val busiest = days.entries.maxByOrNull { it.value }
             return ReplaySummary(
                 period = period,
-                label = period.label(today),
+                label = period.fileSlug(today),
                 totalMs = rankedSongs.sumOf { it.ms },
                 totalPlays = rankedSongs.sumOf { it.plays },
                 songs = rankedSongs,
@@ -992,11 +992,11 @@ data class RankedEntry(
 data class RankedSong(val song: Song, val ms: Long, val plays: Int)
 
 /** How far back a Replay reaches. */
-enum class ReplayPeriod(val chip: String) {
-    THIS_WEEK("This week"),
-    THIS_MONTH("This month"),
-    THIS_YEAR("This year"),
-    ALL_TIME("All time"),
+enum class ReplayPeriod {
+    THIS_WEEK,
+    THIS_MONTH,
+    THIS_YEAR,
+    ALL_TIME,
     ;
 
     /** The inclusive date range this period covers. Null for ALL_TIME. */
@@ -1028,12 +1028,23 @@ enum class ReplayPeriod(val chip: String) {
     /** Whether this period needs day-level filtering (week spans potentially multiple months). */
     fun needsDayFilter(): Boolean = this == THIS_WEEK
 
-    fun label(today: LocalDate): String = when (this) {
-        THIS_WEEK -> "This week"
-        THIS_MONTH -> YearMonth.from(today).month.name.lowercase(Locale.ROOT)
-            .replaceFirstChar { it.uppercase(Locale.ROOT) } + " ${today.year}"
+    /**
+     * The slug the shared poster is filed under — `bitchord-replay-<slug>.png`,
+     * through [com.music.bitchord.ui.replay.saveToGallery]. The on-screen label
+     * for the same period is [com.music.bitchord.ui.replay.ReplaySummary.localizedLabel],
+     * which is where translated copy belongs.
+     *
+     * Deliberately not translated, and not the English sentence this used to
+     * carry: a gallery files saves from every language together, so the slug
+     * stays stable whatever the app is set to, and a file name is not
+     * user-facing copy to translate. The month sorts as its number rather
+     * than its name, so January files before February in every catalogue.
+     */
+    fun fileSlug(today: LocalDate): String = when (this) {
+        THIS_WEEK -> "this-week"
+        THIS_MONTH -> "${today.year}-${today.monthValue.toString().padStart(2, '0')}"
         THIS_YEAR -> today.year.toString()
-        ALL_TIME -> "All time"
+        ALL_TIME -> "all-time"
     }
 }
 
@@ -1046,6 +1057,7 @@ enum class ReplayPeriod(val chip: String) {
  */
 data class ReplaySummary(
     val period: ReplayPeriod,
+    /** The share image's file-name slug, per [ReplayPeriod.fileSlug] — not display copy. */
     val label: String,
     val totalMs: Long,
     val totalPlays: Int,

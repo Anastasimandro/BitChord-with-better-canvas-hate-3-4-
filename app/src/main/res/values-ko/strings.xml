@@ -1310,4 +1310,37 @@
     <string name="bit_perfect_status_inexact">%1$s · 정확하지 않음: 이 소스는 무손실 PCM이 아닙니다</string>
     <string name="bit_perfect_status_waiting">지원되는 출력에서 무손실 트랙을 기다리는 중</string>
     <string name="bit_perfect_status_unavailable">이 트랙에서 사용할 수 없음(%1$s)</string>
+    <string name="automix_overview">Automix 개요</string>
+    <string name="diwali_title">BitChord가 행복한 디왈리를 기원합니다</string>
+    <string name="diwali_subtitle">이 빛의 축제가 당신의 집에는 기쁨을, 일상에는 음악을 가득 채우길 바랍니다.</string>
+    <string name="diwali_cta">축하하기</string>
+    <!-- TODO(i18n): review -->
+    <string name="app_icon_monochrome">Monochrome</string>
+    <string name="app_icon_neon_cyan">Neon Cyan</string>
+    <string name="app_icon_neon_silver">Neon Silver</string>
+    <string name="app_icon_neon_violet">Neon Violet</string>
+    <string name="app_icon_pixel_neon_cyan">Pixel Neon Cyan</string>
+    <string name="app_icon_pixel_neon_silver">Pixel Neon Silver</string>
+    <string name="app_icon_pixel_neon_violet">Pixel Neon Violet</string>
+    <string name="app_icon_samsung_neon_cyan">Samsung Neon Cyan</string>
+    <string name="app_icon_samsung_neon_silver">Samsung Neon Silver</string>
+    <string name="app_icon_samsung_neon_violet">Samsung Neon Violet</string>
+    <string name="replay_story_albums">이번에는 %1$s이 시선을 사로잡았습니다.</string>
+    <string name="replay_story_artists">한 달 내내 %1$s이 계속 돌아왔습니다.</string>
+    <string name="replay_story_artists_week">이번 주에도 %1$s이 계속 돌아왔습니다.</string>
+    <string name="replay_story_genres">%1$s이 함께 당신의 사운드를 만들었습니다.</string>
+    <string name="replay_story_habits">%2$s에서 %1$s을 탐색했습니다.</string>
+    <string name="replay_story_intro">%1$s이 준비되었습니다.</string>
+    <string name="replay_story_minutes">음악과 함께 %1$s을 보냈습니다.</string>
+    <string name="replay_story_songs">총 %1$s이 한 달을 채웠습니다.</string>
+    <string name="replay_story_songs_week">총 %1$s이 일주일을 채웠습니다.</string>
+    <string name="replay_story_summary">음악 속 당신의 %1$s.</string>
+    <string name="spotify_import_language_hint">예: 펀자브어, 마라티어, 한국어…</string>
+    <string name="spotify_import_language_preference">언어 기본 설정</string>
+    <string name="tester_code_message">BitChord 테스터용입니다. 부트로더가 잠금 해제된 이 휴대전화에서 애드온 인증이 작동하도록 합니다.</string>
+    <string name="tester_code_message_saved">이 휴대전화에 테스터 코드가 저장되어 있습니다. 교체하려면 새 코드를 입력하거나 제거하세요.</string>
+    <string name="tester_code_placeholder">XXXXX-XXXXX-XXXXX-XXXXX-XXXXX</string>
+    <string name="tester_code_removed">테스터 코드가 제거되었습니다</string>
+    <string name="tester_code_saved">테스터 코드가 저장되었습니다</string>
+    <string name="tester_code_title">테스터 코드</string>
 </resources>

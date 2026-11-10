@@ -570,3 +570,91 @@ if (providers.gradleProperty("bitchord.bundleWear").orNull != "false" && findPro
         variant.sources.assets?.addGeneratedSourceDirectory(bundle, BundleWearApk::outputDir)
     }
 }
+
+/*
+ * The i18n parity tests (LocaleStringsTest, LocalizationTest) live in the
+ * ordinary unit-test source set, so they already run under `check` and in CI's
+ * `testDevDebugUnitTest` step — but the obvious command for running just them,
+ * `:app:testDebugUnitTest`, does not exist: the env flavor dimension flavors
+ * every task name into testDevDebugUnitTest and friends. These two tasks are
+ * the named entry points, so neither CI nor the next person has to rediscover
+ * that.
+ *
+ * They are wired into `check` below, where the dev-debug unit-test run (the
+ * variant CI's Check workflow runs) carries the tests; the dedicated task
+ * exists for running them alone.
+ */
+val i18nParityTest = tasks.register("i18nParityTest") {
+    group = "verification"
+    description =
+        "Runs the locale parity and config tests (dev debug variant) and prints the per-language key coverage."
+    dependsOn("testDevDebugUnitTest")
+    dependsOn("localeCoverage")
+}
+
+/*
+ * A table of expected vs present translatable keys per language, for whoever
+ * is propagating a base key into the other catalogues. Prints rather than
+ * fails — LocaleStringsTest is the one that fails — because the point here is
+ * to see HOW FAR a language is behind, not just that it is.
+ *
+ * Reads the XML by hand rather than through the resource system: the numbers
+ * must come from exactly the files a translator would edit, and this runs on
+ * a machine with no device attached.
+ */
+tasks.register("localeCoverage") {
+    group = "verification"
+    description = "Prints expected vs present translatable string keys per language catalogue."
+    doLast {
+        val resDir = file("src/main/res")
+        val baseFile = resDir.resolve("values/strings.xml")
+
+        val parser = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        // Keys that need translating: `translatable="false"` entries are excluded,
+        // matching what LocaleStringsTest counts as must-translate.
+        fun translatableKeys(file: File): Set<String> {
+            val keys = mutableSetOf<String>()
+            val doc = parser.parse(file)
+            for (tagName in listOf("string", "plurals", "string-array")) {
+                val nodes = doc.getElementsByTagName(tagName)
+                for (i in 0 until nodes.length) {
+                    val element = nodes.item(i) as org.w3c.dom.Element
+                    if (element.getAttribute("translatable") == "false") continue
+                    val name = element.getAttribute("name")
+                    if (name.isNotEmpty()) keys.add(name)
+                }
+            }
+            return keys
+        }
+
+        val baseKeys = translatableKeys(baseFile)
+        logger.lifecycle("")
+        logger.lifecycle("Locale key coverage against values/strings.xml (${baseKeys.size} translatable keys)")
+        logger.lifecycle("")
+        logger.lifecycle("${"catalogue".padEnd(14)}${"present".padEnd(10)}missing")
+        resDir.listFiles { f -> f.isDirectory && f.name.startsWith("values-") }
+            ?.sortedBy { it.name }
+            ?.forEach { dir ->
+                val strings = dir.resolve("strings.xml")
+                if (!strings.isFile) {
+                    logger.lifecycle("${dir.name.padEnd(14)}${"—".padEnd(10)}(no strings.xml)")
+                    return@forEach
+                }
+                val present = translatableKeys(strings)
+                val missing = baseKeys - present
+                val shown = missing.sorted().take(12)
+                logger.lifecycle(
+                    "${dir.name.padEnd(14)}" +
+                        "${"${present.size}/${baseKeys.size}".padEnd(10)}" +
+                        "${missing.size} missing" +
+                        if (missing.isEmpty()) "" else "  e.g. ${shown.joinToString()}${if (missing.size > shown.size) " …" else ""}",
+                )
+            }
+        logger.lifecycle("")
+    }
+}
+
+// `check` already runs every variant's unit tests, parity tests included;
+// depending on the dedicated task makes that promise explicit and keeps the
+// two entry points from drifting apart.
+tasks.named("check") { dependsOn(i18nParityTest) }

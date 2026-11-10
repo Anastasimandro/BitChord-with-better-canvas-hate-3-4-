@@ -844,7 +844,10 @@ private fun PipelineSection(
             modifier = Modifier.weight(1f),
         ) {
             Text(
-                text = title.uppercase(),
+                // As the resource wrote it — the stage names are translated
+                // copy, and casing is a wording decision that belongs in the
+                // resource, not in a transform that flattens it.
+                text = title,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.W600,

@@ -136,7 +136,11 @@ fun ReplayCreditCard(
             // a card and an advert.
             Row(verticalAlignment = Alignment.Top) {
                 Text(
-                    text = stringResource(Res.string.your_listening_experience).uppercase(Locale.getDefault()),
+                    // As the resource wrote it: casing is a wording decision
+                    // and belongs in the resource — an uppercasing call here
+                    // would flatten the translator's choice and every
+                    // language's own capitalisation rules with it.
+                    text = stringResource(Res.string.your_listening_experience),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.W700,
                     letterSpacing = 1.4.sp,
@@ -168,7 +172,9 @@ fun ReplayCreditCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = label.uppercase(Locale.ROOT),
+                // As the resource wrote it — the label is translated copy and
+                // casing belongs to the resource, not to a transform here.
+                text = label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.W700,
                 letterSpacing = 1.8.sp,
@@ -182,8 +188,10 @@ fun ReplayCreditCard(
             Row(verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
                     Embossed(
-                        text = holder.ifBlank { stringResource(Res.string.default_replay_holder) }
-                            .uppercase(Locale.getDefault()),
+                        // Not uppercased: the holder's name is data whose
+                        // casing is the person's, and the fallback label is
+                        // copy whose casing is the resource's.
+                        text = holder.ifBlank { stringResource(Res.string.default_replay_holder) },
                         size = 13.sp,
                     )
                     if (detail != null) {
@@ -200,7 +208,9 @@ fun ReplayCreditCard(
                     Spacer(Modifier.width(10.dp))
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = stringResource(Res.string.member_since).uppercase(Locale.getDefault()),
+                            // As the resource wrote it — casing belongs in
+                            // the resource, not re-cut here per locale.
+                            text = stringResource(Res.string.member_since),
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 7.sp,
                             lineHeight = 8.sp,

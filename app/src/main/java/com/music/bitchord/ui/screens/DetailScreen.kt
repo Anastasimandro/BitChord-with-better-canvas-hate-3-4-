@@ -2443,8 +2443,11 @@ private fun DetailPage.headerLines(trackCount: Int, playtime: String? = null): P
     val year = parts.lastOrNull { it.length == 4 && it.all(Char::isDigit) }
     val kind = parts.firstOrNull { it.lowercase(Locale.ROOT) in KIND_WORDS }
     val credit = parts.filter { it != year && it != kind }.joinToString(", ")
-    // Title case, "Playlist · 2022 · 10 Tracks · 38 min" — except the
-    // playtime, whose "min" and "1h 25m" are units, not words.
+    // The kind word is recased only when it was read off the subtitle — feed
+    // text whose casing is data, not copy. Everything translated renders as
+    // the resource wrote it: casing is wording, and wording belongs in the
+    // resource — a titlecase() here would flatten the translator's choice and
+    // every language's own capitalisation rules into Java's.
     // An artist grouped out of a device folder is a plain track list, not an
     // artist page, but it is still billed as the artist it is.
     // A device directory plays like a playlist, but it is billed as a folder.
@@ -2454,10 +2457,10 @@ private fun DetailPage.headerLines(trackCount: Int, playtime: String? = null): P
         else -> null
     }
     val meta = listOfNotNull(
-        (kind ?: localKind ?: type.localizedLabel())?.capitalizeWords(),
+        kind?.capitalizeWords() ?: localKind ?: type.localizedLabel(),
         year,
         trackCount.takeIf { it > 0 }?.let {
-            pluralStringResource(R.plurals.track_count_plural, it, it).capitalizeWords()
+            pluralStringResource(R.plurals.track_count_plural, it, it)
         },
         playtime,
     ).joinToString(" · ")
@@ -2474,7 +2477,11 @@ private fun DetailPage.placeholderIcon(): ImageVector = deviceFolderIcon(browseI
     else -> BitChordIcons.MusicNote
 }
 
-/** "10 tracks" → "10 Tracks", "playlist" → "Playlist". */
+/**
+ * Title-cases feed text — "10 tracks" → "10 Tracks", "playlist" → "Playlist" —
+ * for a kind word read off a browse subtitle. Data, not copy: the casings of
+ * translated words belong to their resources and are never run through this.
+ */
 private fun String.capitalizeWords(): String =
     split(' ').joinToString(" ") { word ->
         word.replaceFirstChar { it.titlecase(Locale.getDefault()) }

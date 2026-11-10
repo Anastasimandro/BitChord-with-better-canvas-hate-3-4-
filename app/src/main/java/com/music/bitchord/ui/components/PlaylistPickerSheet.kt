@@ -76,7 +76,6 @@ import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
-import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
@@ -180,8 +179,10 @@ fun PlaylistPickerSheet(
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
                 }
                 SheetHeading(
-                    stringResource(if (song != null) R.string.add_to_playlist else R.string.your_playlists)
-                        .uppercase(Locale.getDefault()),
+                    // Not uppercased: casing is wording, and wording belongs
+                    // in the resource — uppercasing here would flatten the
+                    // translator's choice and languages' own rules with it.
+                    stringResource(if (song != null) R.string.add_to_playlist else R.string.your_playlists),
                 )
 
                 ActionRow(
@@ -439,7 +440,9 @@ private fun NewPlaylistForm(
 
         // A playlist on the device is seen by whoever holds the device.
         if (!offline) {
-            SheetHeading(stringResource(R.string.who_can_see_it).uppercase(Locale.getDefault()))
+            // As the resource wrote it — casing decisions belong in the
+            // resource, not re-cut here per locale.
+            SheetHeading(stringResource(R.string.who_can_see_it))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -814,6 +814,23 @@
     <string name="replay_songs_end"> filled your month.</string>
     <string name="replay_songs_end_week"> filled your week.</string>
     <string name="replay_songs_start">In total, </string>
+    <!--
+        Whole sentences for the Replay story cards (ReplayModel.storyHeadline).
+        Each card's line is ONE resource, with %1$s (and %2$s) standing where
+        the emphasised figure goes, so every language reads its own word order
+        instead of translated fragments glued together in code.
+        TODO(i18n-track-A): move keys to all languages
+    -->
+    <string name="replay_story_intro">Your %1$s is ready.</string>
+    <string name="replay_story_minutes">You spent %1$s with music.</string>
+    <string name="replay_story_songs">In total, %1$s filled your month.</string>
+    <string name="replay_story_songs_week">In total, %1$s filled your week.</string>
+    <string name="replay_story_artists">All month, %1$s kept coming back.</string>
+    <string name="replay_story_artists_week">This week, %1$s kept coming back.</string>
+    <string name="replay_story_albums">This time, %1$s held your attention.</string>
+    <string name="replay_story_genres">Together, %1$s shaped your sound.</string>
+    <string name="replay_story_habits">You explored %1$s from %2$s.</string>
+    <string name="replay_story_summary">Your %1$s in music.</string>
     <string name="replay_summary_start">Your </string>
     <string name="replay_summary_end_week">week</string>
     <string name="saved">Saved</string>

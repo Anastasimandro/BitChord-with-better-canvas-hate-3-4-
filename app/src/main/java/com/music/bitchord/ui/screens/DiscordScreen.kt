@@ -557,7 +557,10 @@ private fun RichPresencePreview(
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Text(
-            text = "$verb $heading".uppercase(Locale.ROOT),
+            // As the resources wrote it — the verb is translated copy, and
+            // casing is a wording decision that belongs to the resource,
+            // where an uppercasing call here would flatten it.
+            text = "$verb $heading",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.W700,
             color = MaterialTheme.colorScheme.onBackground,

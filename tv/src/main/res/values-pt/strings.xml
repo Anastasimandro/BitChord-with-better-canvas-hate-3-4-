@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TODO(i18n): review -->
+
+    <!-- Common actions -->
+    <string name="tv_ok">OK</string>
+    <string name="tv_cancel">Cancelar</string>
+    <string name="tv_done">Concluído</string>
+    <string name="tv_back">Voltar</string>
+    <string name="tv_continue">Continuar</string>
+    <string name="tv_not_now">Agora não</string>
+    <string name="tv_try_again">Tentar novamente</string>
+    <string name="tv_hide">Esconder</string>
+    <string name="tv_create">Criar</string>
+    <string name="tv_clear">Limpar</string>
+    <string name="tv_reset_all">Redefinir tudo</string>
+    <string name="tv_reset_to_default">Redefinir para o padrão</string>
+    <string name="tv_sign_in">Entrar</string>
+    <string name="tv_sign_out">Sair</string>
+    <string name="tv_on">Ligado</string>
+    <string name="tv_off">Desativado</string>
+    <string name="tv_selected">Selecionado</string>
+    <string name="tv_creator">Criador</string>
+    <string name="tv_tv_app">Aplicativo de TV</string>
+
+    <!-- Navigation -->
+    <string name="tv_tab_home">Página inicial</string>
+    <string name="tv_tab_explore">Explorar</string>
+    <string name="tv_tab_library">Biblioteca</string>
+    <string name="tv_tab_search">Pesquisar</string>
+    <string name="tv_tab_settings">Configurações</string>
+    <string name="tv_account">Conta</string>
+    <string name="tv_account_settings">Configurações da conta</string>
+    <string name="tv_now_playing">Reproduzindo agora</string>
+
+    <!-- First-run setup -->
+    <string name="tv_setup_welcome_title">Bem-vindo ao BitChord</string>
+    <string name="tv_setup_welcome_message">Sua música, feita para a tela grande.</string>
+    <string name="tv_setup_set_up_later">Configurar mais tarde</string>
+    <string name="tv_setup_choose_look_title">Escolha um visual</string>
+    <string name="tv_setup_choose_look_message">Você pode alterar isso mais tarde em Configurações.</string>
+    <string name="tv_setup_done_title">Você está tudo pronto</string>
+    <string name="tv_setup_done_message">Encontre músicas em Home e Explore. Tudo o que você salva está na Biblioteca.</string>
+    <string name="tv_setup_start_listening">Comece a ouvir</string>
+    <string name="tv_setup_signed_in">Conectado</string>
+    <string name="tv_setup_sign_in_title">Faça login no YouTube Music</string>
+    <string name="tv_setup_signed_in_message">BitChord usará a biblioteca e as recomendações do %1$s.</string>
+    <string name="tv_setup_sign_in_message">Traga sua biblioteca, playlists e recomendações. Você também pode fazer isso mais tarde em Configurações.</string>
+    <string name="tv_setup_listening_title">Ouvindo</string>
+    <string name="tv_setup_listening_message">Selecione uma linha para ativar ou desativar.</string>
+    <string name="tv_setup_synced_lyrics">Letras sincronizadas</string>
+    <string name="tv_setup_motion_artwork">Arte em movimento</string>
+    <string name="tv_setup_automix">Mistura automática</string>
+    <string name="tv_setup_spatial_audio">Áudio Espacial</string>
+
+    <!-- Search -->
+    <string name="tv_search_placeholder">Artistas, músicas, álbuns e muito mais</string>
+    <string name="tv_no_results">Sem resultados</string>
+    <string name="tv_no_results_message">Nada correspondeu a “%1$s”. Verifique a ortografia ou tente outras palavras.</string>
+    <string name="tv_search_title">Pesquisa BitChord</string>
+    <string name="tv_search_message">Encontre músicas, álbuns, artistas e playlists.</string>
+    <string name="tv_recent_searches">Pesquisas recentes</string>
+    <string name="tv_top_results">Principais resultados</string>
+    <string name="tv_songs">Músicas</string>
+    <string name="tv_artists">Artistas</string>
+    <string name="tv_albums">Álbuns</string>
+    <string name="tv_playlists">Listas de reprodução</string>
+    <string name="tv_more">Mais</string>
+
+    <!-- Library -->
+    <string name="tv_library_recently_played">Jogado recentemente</string>
+    <string name="tv_library_liked_songs">Músicas curtidas</string>
+    <string name="tv_downloaded">Baixado</string>
+    <string name="tv_on_this_device">Neste dispositivo</string>
+    <string name="tv_sign_in_ellipsis">Faça login…</string>
+    <string name="tv_nothing_played_title">Nada tocado ainda</string>
+    <string name="tv_nothing_played_message">As músicas que você toca aparecem aqui.</string>
+    <string name="tv_no_songs">Sem músicas</string>
+    <string name="tv_no_songs_message">Não há nada aqui ainda.</string>
+    <string name="tv_reload_library">Recarregar Biblioteca</string>
+
+    <!-- Home, detail and artist pages -->
+    <string name="tv_nothing_here_title">Nada aqui ainda</string>
+    <string name="tv_nothing_here_message">Faça login em Configurações ou verifique sua conexão para ver suas recomendações.</string>
+    <string name="tv_allow_access_title">Permitir acesso à música</string>
+    <string name="tv_allow_access_message">O BitChord precisa de permissão para ler música nesta TV e nas unidades USB conectadas.</string>
+    <string name="tv_allow_access">Permitir acesso</string>
+    <string name="tv_nothing_to_play">Não há nada para jogar aqui ainda.</string>
+    <string name="tv_suggestions">Sugestões</string>
+    <string name="tv_latest_release">Último lançamento</string>
+    <string name="tv_top_songs">Músicas mais tocadas</string>
+    <string name="tv_about_artist">Sobre %1$s</string>
+    <string name="tv_subscribe">Inscrever-se</string>
+    <string name="tv_unsubscribe">Cancelar inscrição</string>
+    <string name="tv_shuffle">Aleatório</string>
+    <string name="tv_play">Tocar</string>
+
+    <!-- Now playing -->
+    <string name="tv_not_playing">Não está reproduzindo</string>
+    <string name="tv_not_playing_message">Escolha algo em Página inicial, Explorar ou Biblioteca.</string>
+    <string name="tv_browse_music">Navegar pela música</string>
+    <string name="tv_up_next">A seguir</string>
+    <string name="tv_lyrics">Letras</string>
+    <string name="tv_favorite">Favorito</string>
+    <string name="tv_unfavorite">Não favorito</string>
+    <string name="tv_autoplay">Reprodução automática</string>
+    <string name="tv_repeat_one">Repetir um</string>
+    <string name="tv_repeat_all">Repetir tudo</string>
+    <string name="tv_repeat_off">Repetir desativado</string>
+    <string name="tv_autoplay_on_message">Música semelhante tocará quando esta música terminar.</string>
+    <string name="tv_autoplay_off_message">Nada está na fila depois dessa música.</string>
+
+    <!-- Settings -->
+    <string name="tv_settings_blurb">Preferências de reprodução, som e exibição do BitChord nesta TV.</string>
+    <string name="tv_settings_account">Conta</string>
+    <string name="tv_settings_youtube_music">YouTube Music</string>
+    <string name="tv_settings_signed_in">Conectado</string>
+    <string name="tv_settings_youtube_music_blurb">Sua biblioteca, playlists e recomendações vêm desta conta.</string>
+    <string name="tv_settings_playback">Reprodução</string>
+    <string name="tv_settings_automix">Mistura automática</string>
+    <string name="tv_settings_automix_blurb">Combina uma música com a próxima, de acordo com seu ritmo.</string>
+    <string name="tv_settings_crossfade">Fade cruzado</string>
+    <string name="tv_settings_crossfade_blurb">Cada música desaparece gradualmente à medida que a próxima aparece. Selecione para alterar a duração.</string>
+    <string name="tv_settings_autoplay">Reprodução automática</string>
+    <string name="tv_settings_autoplay_blurb">Quando a fila terminar, continua tocando uma música semelhante à que você estava ouvindo.</string>
+    <string name="tv_settings_skip_silence">Pular silêncio</string>
+    <string name="tv_settings_skip_silence_blurb">Pula trechos silenciosos no início e no final das músicas.</string>
+    <string name="tv_settings_sound">Som</string>
+    <string name="tv_settings_equalizer">Equalizador</string>
+    <string name="tv_settings_equalizer_blurb">Molde o som com predefinições ou sete bandas de sua preferência.</string>
+    <string name="tv_settings_spatial_audio">Áudio espacial</string>
+    <string name="tv_settings_spatial_audio_blurb">Amplia a música estéreo usando o virtualizador de áudio da TV, onde houver.</string>
+    <string name="tv_settings_sound_check">Verificação de som</string>
+    <string name="tv_settings_sound_check_blurb">Reproduz todas as músicas com o mesmo volume percebido.</string>
+    <string name="tv_settings_usb_dac">DAC USB</string>
+    <string name="tv_settings_usb_dac_blurb">Envia áudio diretamente para um DAC USB conectado, inalterado, quando um está conectado.</string>
+    <string name="tv_settings_now_playing">Reproduzindo agora</string>
+    <string name="tv_settings_synced_lyrics">Letras sincronizadas</string>
+    <string name="tv_settings_synced_lyrics_blurb">Letras que acompanham a música, linha por linha.</string>
+    <string name="tv_settings_lyrics_sources">Fontes de letras</string>
+    <string name="tv_settings_lyrics_sources_blurb">Escolha quais bancos de dados de letras solicitar e em que ordem.</string>
+    <string name="tv_settings_motion_artwork">Arte em movimento</string>
+    <string name="tv_settings_motion_artwork_blurb">Reproduz a arte do vídeo em loop de uma música atrás do player, quando ele tiver um.</string>
+    <string name="tv_settings_motion_artwork_lyrics">Arte em movimento em letras</string>
+    <string name="tv_settings_motion_artwork_lyrics_blurb">Mantém a arte do vídeo reproduzida atrás das letras em tela cheia.</string>
+    <string name="tv_settings_stats_for_nerds">Estatísticas para Nerds</string>
+    <string name="tv_settings_stats_for_nerds_blurb">Mostra o codec, taxa de bits e taxa de amostragem do que está sendo reproduzido.</string>
+    <string name="tv_settings_display">Exibição</string>
+    <string name="tv_settings_appearance">Aparência</string>
+    <string name="tv_settings_appearance_blurb">O pano de fundo por trás das páginas do BitChord.</string>
+    <string name="tv_settings_player_background">Fundo do reprodutor</string>
+    <string name="tv_settings_player_background_blurb">O que está sendo reproduzido agora mostra atrás da música: as cores da arte ou o preto puro do AMOLED.</string>
+    <string name="tv_settings_interface_size">Tamanho da interface</string>
+    <string name="tv_settings_interface_size_blurb">Torna tudo maior ou menor. Selecione para percorrer os tamanhos.</string>
+    <string name="tv_settings_refresh_rate">Taxa de atualização</string>
+    <string name="tv_settings_refresh_rate_blurb">Com que frequência a tela é redesenhada enquanto você navega.</string>
+    <string name="tv_settings_reduce_motion">Reduzir movimento</string>
+    <string name="tv_settings_reduce_motion_blurb">Acalma o fundo em movimento e outras animações decorativas.</string>
+    <string name="tv_settings_reduce_transparency">Reduzir a transparência</string>
+    <string name="tv_settings_reduce_transparency_blurb">Substitui fundos desfocados por fundos sólidos. Ajuda em TVs mais lentas.</string>
+    <string name="tv_settings_connections">Conexões</string>
+    <string name="tv_settings_scrobbling">Scrobbling</string>
+    <string name="tv_settings_scrobbling_blurb">Last.fm e ListenBrainz.</string>
+    <string name="tv_settings_general">Geral</string>
+    <string name="tv_settings_software_update">Atualização de software</string>
+    <string name="tv_settings_software_update_blurb">Baixe e instale a nova versão do BitChord para TV.</string>
+    <string name="tv_settings_set_up_again">Configurar novamente</string>
+    <string name="tv_settings_set_up_again_blurb">Faça a configuração inicial novamente.</string>
+    <string name="tv_settings_about">Sobre</string>
+
+    <!-- Song actions -->
+    <string name="tv_play_next">Tocar a seguir</string>
+    <string name="tv_play_last">Tocar por último</string>
+    <string name="tv_start_station">Iniciar estação</string>
+    <string name="tv_unlove">Não curtir mais</string>
+    <string name="tv_love">Curtir</string>
+    <string name="tv_add_to_playlist">Adicionar à playlist</string>
+    <string name="tv_go_to_album">Ir para o álbum</string>
+    <string name="tv_go_to_artist">Ir para o Artista</string>
+    <string name="tv_sleep_timer">Temporizador de sono</string>
+    <string name="tv_new_playlist">Nova lista de reprodução</string>
+    <string name="tv_new_playlist_message">Será privado, com essa música.</string>
+    <string name="tv_playlist_name">Nome da lista de reprodução</string>
+    <string name="tv_add_to_playlist_title">Adicionar à lista de reprodução</string>
+    <string name="tv_new_playlist_ellipsis">Nova lista de reprodução…</string>
+    <string name="tv_stop_playing_after">Parar a reprodução de música depois de</string>
+    <string name="tv_minutes">%1$d minutos</string>
+    <string name="tv_end_of_current_song">Fim da música atual</string>
+    <string name="tv_turn_off_timer">Desligue o cronômetro</string>
+
+    <!-- Equalizer -->
+    <string name="tv_equalizer">Equalizador</string>
+    <string name="tv_equalizer_bands">Bandas</string>
+    <string name="tv_equalizer_presets">Predefinições</string>
+    <string name="tv_equalizer_hint">Para cima e para baixo formam uma banda. Selecione redefine-o.</string>
+    <string name="tv_equalizer_flat">Plano</string>
+    <string name="tv_eq_preset_acoustic">Acústico</string>
+    <string name="tv_eq_preset_bass_boost">Reforço de graves</string>
+    <string name="tv_eq_preset_bass_cut">Redutor de graves</string>
+    <string name="tv_eq_preset_classical">Clássico</string>
+    <string name="tv_eq_preset_electronic">Eletrônico</string>
+    <string name="tv_eq_preset_hip_hop">Hip Hop</string>
+    <string name="tv_eq_preset_jazz">Jazz</string>
+    <string name="tv_eq_preset_loudness">Volume</string>
+    <string name="tv_eq_preset_rock">Rock</string>
+    <string name="tv_eq_preset_spoken_word">Palavra falada</string>
+    <string name="tv_eq_preset_treble_boost">Reforço de agudos</string>
+    <string name="tv_eq_preset_treble_cut">Redutor de agudos</string>
+    <string name="tv_eq_preset_vocal">Reforço vocal</string>
+    <string name="tv_eq_preset_small_speakers">Alto-falantes pequenos</string>
+    <string name="tv_eq_preset_late_night">Tarde da noite</string>
+
+    <!-- Software update -->
+    <string name="tv_update_title">BitChord %1$s está disponível</string>
+    <string name="tv_update_scan_message">Digitalize o código com seu telefone para obter esta atualização do GitHub.</string>
+    <string name="tv_update_downloaded_message">Baixado. Selecione Instalar agora para atualizar.</string>
+    <string name="tv_update_download_and_install">Baixe e instale</string>
+    <string name="tv_update_cancel_download">Cancelar download</string>
+    <string name="tv_update_install_now">Instale agora</string>
+    <string name="tv_update_downloading">Baixando… %1$d%%</string>
+
+    <!-- Sign-in, profiles and app lock -->
+    <string name="tv_sign_in_title">Faça login no YouTube Music</string>
+    <string name="tv_sign_in_message">Sua biblioteca, playlists e recomendações seguem sua conta.</string>
+    <string name="tv_sign_in_on_tv">Faça login nesta TV</string>
+    <string name="tv_sign_in_on_tv_subtitle">Use o controle remoto para fazer login no Google.</string>
+    <string name="tv_sign_in_with_phone">Faça login com seu telefone</string>
+    <string name="tv_sign_in_with_phone_subtitle">Digitalize um código com um telefone no mesmo Wi-Fi.</string>
+    <string name="tv_personal">Pessoal</string>
+    <string name="tv_enter_pin">Insira o PIN de 4 dígitos</string>
+    <string name="tv_profile_locked">O perfil está bloqueado. Insira o PIN para %1$s</string>
+    <string name="tv_incorrect_pin_try_again">PIN incorreto. Tente novamente.</string>
+    <string name="tv_incorrect_pin">PIN incorreto</string>
+    <string name="tv_who_is_watching">Quem está assistindo?</string>
+    <string name="tv_nobody_signed_in">Ninguém está conectado. Adicione uma conta YouTube Music para acessar suas músicas.</string>
+    <string name="tv_choose_profile">Escolha um perfil para alternar sua biblioteca, playlists e recomendações.</string>
+    <string name="tv_brand_account">Conta de marca</string>
+    <string name="tv_set_pin">Definir PIN de 4 dígitos</string>
+    <string name="tv_set_pin_message">Crie um PIN de 4 dígitos para %1$s</string>
+    <string name="tv_confirm_pin">Confirme o PIN de 4 dígitos</string>
+    <string name="tv_confirm_pin_message">Digite novamente seu PIN de 4 dígitos</string>
+    <string name="tv_pins_did_not_match">Os PINs não correspondiam. Tente novamente.</string>
+    <string name="tv_turn_off_app_lock">Desative o bloqueio de aplicativos</string>
+    <string name="tv_enter_current_pin">Digite o PIN atual de 4 dígitos para remover o bloqueio</string>
+    <string name="tv_sign_out_message">Digite o PIN de 4 dígitos para sair do %1$s</string>
+    <string name="tv_app_lock">Bloqueio de aplicativo (PIN de 4 dígitos)</string>
+    <string name="tv_profile_lock_on">O bloqueio de perfil está ativado</string>
+    <string name="tv_profile_lock_off">O bloqueio de perfil está desativado</string>
+    <string name="tv_remove_account">Remover esta conta da TV</string>
+    <string name="tv_try_again_in">Tente novamente em %1$s</string>
+    <string name="tv_phone_sign_in_step_1">Conecte seu telefone ao mesmo Wi-Fi desta TV.</string>
+    <string name="tv_phone_sign_in_step_2">Digitalize o código ou abra %1$s.</string>
+    <string name="tv_phone_sign_in_step_3">Siga as etapas no seu telefone. Esta TV inicia sessão sozinha.</string>
+    <string name="tv_press_back_for_done">Pressione Voltar para Concluído ou Cancelar</string>
+
+    <!-- Discord and scrobbling -->
+    <string name="tv_discord_title">Discord</string>
+    <string name="tv_discord_message">Mostre o que você está ouvindo no seu status Discord.</string>
+    <string name="tv_discord_token">Token Discord</string>
+    <string name="tv_turn_off">Desligar</string>
+    <string name="tv_turn_on">Ligar</string>
+    <string name="tv_scrobbling_title">Rabiscando</string>
+    <string name="tv_scrobbling_message">Conecte-os no aplicativo de telefone BitChord; a TV usa as mesmas contas.</string>
+    <string name="tv_not_connected">Não conectado</string>
+    <string name="tv_connected">Conectado</string>
+
+    <!-- About -->
+    <string name="tv_version">Versão %1$s</string>
+    <string name="tv_about_message">Software gratuito sob a GNU GPL v3. Não afiliado ao YouTube ou Google.</string>
+
+    <!-- Refresh rate and appearance -->
+    <string name="tv_refresh_rate_title">Taxa de atualização</string>
+    <string name="tv_refresh_rate_message">Agora %1$d × %2$d em %3$s</string>
+    <string name="tv_appearance_title">Aparência</string>
+    <string name="tv_lyrics_sources_title">Fontes de letras</string>
+    <string name="tv_lyrics_sources_message">Selecione para ativar ou desativar uma fonte. Pressione Esquerda ou Direita para mover para cima ou para baixo; o primeiro é perguntado primeiro.</string>
+    <string name="tv_prefer_word_synced">Preferir sincronização palavra por palavra</string>
+    <string name="tv_prefer_word_synced_subtitle">Espere pelas letras palavra por palavra antes de se decidir por linha por linha.</string>
+
+    <!-- Personalization -->
+    <string name="tv_personalization_artwork">Arte</string>
+    <string name="tv_personalization_artwork_desc">Escuro, suavemente tingido pela arte do que está tocando.</string>
+    <string name="tv_personalization_midnight">Meia-noite</string>
+    <string name="tv_personalization_midnight_desc">Um fundo profundo da Marinha.</string>
+    <string name="tv_personalization_pure_black">Preto Puro</string>
+    <string name="tv_personalization_pure_black_desc">Preto verdadeiro, para telas OLED.</string>
+    <string name="tv_refresh_auto">Automático (recomendado)</string>
+    <string name="tv_refresh_auto_desc">Permite que a TV e o sistema Android gerenciem a taxa de atualização da tela de forma dinâmica.</string>
+    <string name="tv_refresh_smooth_60">Suave 60Hz</string>
+    <string name="tv_refresh_smooth_60_desc">Solicita movimento de interface padrão de 60 Hz em resolução nativa.</string>
+    <string name="tv_refresh_ultra_120">Ultra 120Hz</string>
+    <string name="tv_refresh_ultra_120_desc">Solicita até 120 fps para movimento da interface em monitores compatíveis. O vídeo Canvas mantém a taxa de quadros de origem nativa.</string>
+
+    <!-- Nickname validation -->
+    <string name="tv_nickname_empty">O apelido não pode ficar vazio</string>
+    <string name="tv_nickname_line_breaks">Não são permitidas quebras de linha</string>
+    <string name="tv_nickname_too_long">Deve ter 24 caracteres ou menos (%1$d/%2$d)</string>
+
+    <!-- Miscellaneous -->
+    <string name="tv_unknown_artist">Artista Desconhecido</string>
+    <string name="tv_no_song_playing">Nenhuma música tocando</string>
+    <string name="tv_track">Faixa</string>
+    <string name="tv_pin_throttle_seconds">%1$d segundos</string>
+    <string name="tv_pin_throttle_minute">1 minuto</string>
+    <string name="tv_pin_throttle_minutes">%1$d minutos</string>
+
+    <!-- Phone sign-in web page -->
+    <string name="tv_auth_no_cookie">Nenhum cookie detectado. Por favor, siga as instruções.</string>
+    <string name="tv_auth_search_placeholder">Pesquisar música para tocar na TV...</string>
+    <string name="tv_auth_cookie_placeholder">Cole SAPISID/cookie de sessão aqui...</string>
+</resources>

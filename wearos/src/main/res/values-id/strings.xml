@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connecting">Menghubungkan…</string>
+    <string name="no_phone_title">Telepon tidak terhubung</string>
+    <string name="no_phone_body">Buka BitChord di ponsel Anda dan dekatkan ke jam tangan.</string>
+    <string name="retry">Coba Lagi</string>
+    <string name="nothing_playing">Tidak ada yang diputar</string>
+    <string name="nothing_playing_body">Putar sesuatu di BitChord di ponsel Anda.</string>
+    <string name="resume">Lanjutkan</string>
+    <string name="up_next">Berikutnya</string>
+    <string name="queue_empty">Tidak ada berikutnya</string>
+    <string name="loading">Memuat…</string>
+    <string name="playing_now">Sedang diputar</string>
+    <string name="more">Lainnya</string>
+    <string name="shuffle">Acak</string>
+    <string name="repeat">Ulangi</string>
+    <string name="repeat_off">Nonaktif</string>
+    <string name="repeat_all">Semua</string>
+    <string name="repeat_one">Satu</string>
+    <string name="on">Aktif</string>
+    <string name="off">Nonaktif</string>
+    <string name="love">Suka</string>
+    <string name="loved">Disukai</string>
+    <string name="volume">Volume</string>
+    <string name="on_phone">Di ponsel</string>
+    <string name="play">Putar</string>
+    <string name="pause">Jeda</string>
+    <string name="next">Berikutnya</string>
+    <string name="previous">Sebelumnya</string>
+    <string name="output">Output</string>
+    <string name="this_watch">Jam ini</string>
+    <string name="watch_speaker">Speaker atau headphone jam</string>
+    <string name="on_phone_output">Di ponsel</string>
+    <string name="phone_speaker">Speaker ponsel</string>
+    <string name="wired_headphones">Headphone berkabel</string>
+    <string name="usb_audio">Audio USB</string>
+    <string name="hdmi">HDMI</string>
+    <string name="other_output">Output lain</string>
+    <string name="moving_to_watch">Beralih ke jam…</string>
+    <string name="update_channel">Pembaruan</string>
+    <string name="update_ready">Pembaruan BitChord siap</string>
+    <string name="update_tap">Ketuk untuk memasang pembaruan dari ponsel Anda.</string>
+</resources>

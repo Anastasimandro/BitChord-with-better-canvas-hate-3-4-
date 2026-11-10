@@ -27,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 /**
  * The Replay as one picture, drawn to a bitmap you can send.
@@ -417,7 +416,10 @@ private fun drawHeader(
         holder.ifBlank { context.getString(R.string.default_replay_holder) },
         memberSince?.let { context.getString(R.string.member_since_value, it) },
     ).joinToString(" · ")
-    canvas.drawText(credit.uppercase(Locale.ROOT), MARGIN, 182f, type.label(24f, 0x8CFFFFFF.toInt()))
+    // As the resources wrote it — the holder's name is data, and the
+    // member-since line is copy; casing belongs to each of them, not to an
+    // uppercasing call that flattens both.
+    canvas.drawText(credit, MARGIN, 182f, type.label(24f, 0x8CFFFFFF.toInt()))
     return 300f
 }
 
@@ -435,7 +437,10 @@ private fun drawTotals(
         type.heading(148f, Color.WHITE),
     )
     canvas.drawText(
-        context.getString(R.string.minutes_listened).uppercase(context.resources.configuration.locales[0]),
+        // As the resource wrote it: casing is a wording decision and belongs
+        // in the resource — an uppercasing call here would flatten the
+        // translator's choice and Turkish İ-type rules with it.
+        context.getString(R.string.minutes_listened),
         MARGIN,
         top + 176f,
         type.label(30f, 0xB3FFFFFF.toInt(), tracking = 0.14f),
@@ -470,15 +475,16 @@ private fun drawColumns(
     val columnWidth = (POSTER_W - MARGIN * 2 - COLUMN_GAP) / 2f
     val right = MARGIN + columnWidth + COLUMN_GAP
 
-    val locale = context.resources.configuration.locales[0]
+    // Section labels as the resources wrote them — casing belongs in the
+    // resource, not in an uppercasing call at draw time.
     canvas.drawText(
-        context.getString(R.string.top_songs).uppercase(locale),
+        context.getString(R.string.top_songs),
         MARGIN,
         top,
         type.label(28f, 0xB3FFFFFF.toInt(), tracking = 0.16f),
     )
     canvas.drawText(
-        context.getString(R.string.top_artists).uppercase(locale),
+        context.getString(R.string.top_artists),
         right,
         top,
         type.label(28f, 0xB3FFFFFF.toInt(), tracking = 0.16f),
@@ -538,7 +544,7 @@ private fun drawAlbums(
 ): Float {
     if (albums.isEmpty()) return top
     canvas.drawText(
-        context.getString(R.string.top_albums).uppercase(context.resources.configuration.locales[0]),
+        context.getString(R.string.top_albums),
         MARGIN,
         top,
         type.label(28f, 0xB3FFFFFF.toInt(), tracking = 0.16f),
@@ -566,7 +572,7 @@ private fun drawGenres(canvas: Canvas, context: Context, type: Fonts, summary: R
     val genres = summary.genreRows(POSTER_GENRES)
     if (genres.isEmpty()) return
     canvas.drawText(
-        context.getString(R.string.top_genres).uppercase(context.resources.configuration.locales[0]),
+        context.getString(R.string.top_genres),
         MARGIN,
         top,
         type.label(28f, 0xB3FFFFFF.toInt(), tracking = 0.16f),

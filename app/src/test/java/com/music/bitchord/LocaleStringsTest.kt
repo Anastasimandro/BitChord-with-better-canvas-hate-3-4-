@@ -13,6 +13,10 @@ import javax.xml.parsers.DocumentBuilderFactory
 /**
  * Every language the app offers must translate every key in values/strings.xml. A missing key
  * doesn't crash, it silently falls back to English mid-screen, so this catches it at test time.
+ *
+ * The list of languages is not copied here: it is derived from [SUPPORTED_LANGUAGES] — the
+ * single canonical catalog (see LocalizationTest for the other checks against it) — so a
+ * language added there is parameterised into this test without a second hand-kept list.
  */
 @RunWith(Parameterized::class)
 class LocaleStringsTest(private val tag: String) {

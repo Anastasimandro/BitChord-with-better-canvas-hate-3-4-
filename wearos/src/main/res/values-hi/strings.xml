@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connecting">कनेक्ट हो रहा है…</string>
+    <string name="no_phone_title">फ़ोन कनेक्ट नहीं है</string>
+    <string name="no_phone_body">अपने फ़ोन पर BitChord खोलें और इसे अपनी घड़ी के पास रखें।</string>
+    <string name="retry">फिर से कोशिश करें</string>
+    <string name="nothing_playing">कुछ नहीं चल रहा</string>
+    <string name="nothing_playing_body">अपने फ़ोन पर BitChord में कुछ चलाएँ।</string>
+    <string name="resume">फिर से शुरू करें</string>
+    <string name="up_next">आगे</string>
+    <string name="queue_empty">आगे कुछ नहीं</string>
+    <string name="loading">लोड हो रहा है…</string>
+    <string name="playing_now">अभी चल रहा है</string>
+    <string name="more">और</string>
+    <string name="shuffle">शफ़ल</string>
+    <string name="repeat">दोहराएँ</string>
+    <string name="repeat_off">बंद</string>
+    <string name="repeat_all">सभी</string>
+    <string name="repeat_one">एक</string>
+    <string name="on">चालू</string>
+    <string name="off">बंद</string>
+    <string name="love">पसंद</string>
+    <string name="loved">पसंद किया</string>
+    <string name="volume">वॉल्यूम</string>
+    <string name="on_phone">फ़ोन पर</string>
+    <string name="play">चलाएं</string>
+    <string name="pause">रोकें</string>
+    <string name="next">अगला</string>
+    <string name="previous">पिछला</string>
+    <string name="output">आउटपुट</string>
+    <string name="this_watch">यह घड़ी</string>
+    <string name="watch_speaker">घड़ी का स्पीकर या हेडफ़ोन</string>
+    <string name="on_phone_output">फ़ोन पर</string>
+    <string name="phone_speaker">फ़ोन स्पीकर</string>
+    <string name="wired_headphones">वायर्ड हेडफ़ोन</string>
+    <string name="usb_audio">USB ऑडियो</string>
+    <string name="hdmi">HDMI</string>
+    <string name="other_output">अन्य आउटपुट</string>
+    <string name="moving_to_watch">घड़ी पर जा रहा है…</string>
+    <string name="update_channel">अपडेट</string>
+    <string name="update_ready">BitChord अपडेट तैयार है</string>
+    <string name="update_tap">अपने फ़ोन से अपडेट इंस्टॉल करने के लिए टैप करें।</string>
+</resources>

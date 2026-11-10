@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connecting">Łączenie…</string>
+    <string name="no_phone_title">Telefon nie jest połączony</string>
+    <string name="no_phone_body">Otwórz BitChord na telefonie i trzymaj go blisko zegarka.</string>
+    <string name="retry">Spróbuj ponownie</string>
+    <string name="nothing_playing">Nic nie jest odtwarzane</string>
+    <string name="nothing_playing_body">Odtwórz coś w BitChord na telefonie.</string>
+    <string name="resume">Wznów</string>
+    <string name="up_next">Następne</string>
+    <string name="queue_empty">Brak następnych</string>
+    <string name="loading">Ładowanie…</string>
+    <string name="playing_now">Teraz odtwarzane</string>
+    <string name="more">Więcej</string>
+    <string name="shuffle">Losowo</string>
+    <string name="repeat">Powtarzaj</string>
+    <string name="repeat_off">Wyłączone</string>
+    <string name="repeat_all">Wszystko</string>
+    <string name="repeat_one">Jeden</string>
+    <string name="on">Wł.</string>
+    <string name="off">Wyłączone</string>
+    <string name="love">Lubię</string>
+    <string name="loved">Polubione</string>
+    <string name="volume">Głośność</string>
+    <string name="on_phone">Na telefonie</string>
+    <string name="play">Odtwórz</string>
+    <string name="pause">Wstrzymaj</string>
+    <string name="next">Dalej</string>
+    <string name="previous">Poprzedni</string>
+    <string name="output">Wyjście</string>
+    <string name="this_watch">Ten zegarek</string>
+    <string name="watch_speaker">Głośnik lub słuchawki zegarka</string>
+    <string name="on_phone_output">Na telefonie</string>
+    <string name="phone_speaker">Głośnik telefonu</string>
+    <string name="wired_headphones">Słuchawki przewodowe</string>
+    <string name="usb_audio">Audio USB</string>
+    <string name="hdmi">HDMI</string>
+    <string name="other_output">Inne wyjście</string>
+    <string name="moving_to_watch">Przełączanie na zegarek…</string>
+    <string name="update_channel">Aktualizacje</string>
+    <string name="update_ready">Aktualizacja BitChord gotowa</string>
+    <string name="update_tap">Dotknij, aby zainstalować aktualizację z telefonu.</string>
+</resources>

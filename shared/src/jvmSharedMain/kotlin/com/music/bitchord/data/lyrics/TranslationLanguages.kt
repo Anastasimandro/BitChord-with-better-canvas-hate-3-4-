@@ -173,17 +173,49 @@ private val byCode = TRANSLATION_LANGUAGES.associateBy { it.code.lowercase(Local
  */
 fun translationLanguageName(code: String, inLocale: Locale): String {
     val entry = byCode[code.lowercase(Locale.ROOT)]
-    // A subtag is the whole point of the codes that carry one, and the platform
-    // renders it as territory: zh-CN comes back "Chinese (China)", which names
-    // the country rather than the script and leaves zh-TW looking like the same
-    // language somewhere else. For those the curated name is the accurate one.
-    val platform = if ('-' in code) {
-        ""
-    } else {
-        Locale.forLanguageTag(code).getDisplayName(inLocale)
+    val platform = when {
+        code.equals("zh-CN", ignoreCase = true) || code.equals("zh-Hans", ignoreCase = true) ->
+            Locale.forLanguageTag("zh-Hans").getDisplayName(inLocale)
+        code.equals("zh-TW", ignoreCase = true) || code.equals("zh-Hant", ignoreCase = true) ->
+            Locale.forLanguageTag("zh-Hant").getDisplayName(inLocale)
+        code.equals("iw", ignoreCase = true) ->
+            Locale.forLanguageTag("he").getDisplayName(inLocale)
+        code.equals("in", ignoreCase = true) ->
+            Locale.forLanguageTag("id").getDisplayName(inLocale)
+        code.equals("ji", ignoreCase = true) ->
+            Locale.forLanguageTag("yi").getDisplayName(inLocale)
+        code.equals("jw", ignoreCase = true) ->
+            Locale.forLanguageTag("jv").getDisplayName(inLocale)
+        '-' in code -> {
+            val tagLocale = Locale.forLanguageTag(code)
+            val name = tagLocale.getDisplayName(inLocale)
+            if (name.isNotBlank() && !name.equals(code, ignoreCase = true)) name else ""
+        }
+        else -> Locale.forLanguageTag(code).getDisplayName(inLocale)
     }
     // getDisplayName echoes the tag back when it knows nothing about it.
     val known = platform.isNotBlank() && !platform.equals(code, ignoreCase = true)
     val name = if (known) platform else entry?.fallbackName ?: code
     return name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(inLocale) else it.toString() }
+}
+
+/**
+ * Returns the native endonym of the language (how the language refers to itself),
+ * e.g., "Español", "日本語", "Français", "Deutsch", "한국어", "简体中文", "繁體中文".
+ */
+fun translationLanguageNativeName(code: String): String {
+    val tag = when {
+        code.equals("zh-CN", ignoreCase = true) -> "zh-Hans"
+        code.equals("zh-TW", ignoreCase = true) -> "zh-Hant"
+        code.equals("iw", ignoreCase = true) -> "he"
+        code.equals("in", ignoreCase = true) -> "id"
+        code.equals("ji", ignoreCase = true) -> "yi"
+        code.equals("jw", ignoreCase = true) -> "jv"
+        else -> code
+    }
+    val targetLocale = Locale.forLanguageTag(tag)
+    val native = targetLocale.getDisplayName(targetLocale)
+    val known = native.isNotBlank() && !native.equals(tag, ignoreCase = true) && !native.equals(code, ignoreCase = true)
+    val result = if (known) native else byCode[code.lowercase(Locale.ROOT)]?.fallbackName ?: code
+    return result.replaceFirstChar { if (it.isLowerCase()) it.titlecase(targetLocale) else it.toString() }
 }
