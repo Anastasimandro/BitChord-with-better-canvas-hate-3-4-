@@ -1,6 +1,6 @@
 package com.music.bitchord
 
-import com.music.bitchord.ui.components.SUPPORTED_LANGUAGES
+import com.music.bitchord.data.SUPPORTED_LANGUAGES
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith

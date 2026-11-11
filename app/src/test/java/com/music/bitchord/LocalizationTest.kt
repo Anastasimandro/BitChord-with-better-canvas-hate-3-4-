@@ -1,8 +1,9 @@
 package com.music.bitchord
 
-import com.music.bitchord.ui.components.SUPPORTED_LANGUAGES
-import com.music.bitchord.ui.components.languageDisplayName
-import com.music.bitchord.ui.components.languageDisplayNameDetailed
+import com.music.bitchord.data.SUPPORTED_LANGUAGES
+import com.music.bitchord.data.languageDisplayName
+import com.music.bitchord.data.languageDisplayNameDetailed
+import com.music.bitchord.data.selfDisplayName
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
