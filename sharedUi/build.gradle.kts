@@ -115,3 +115,85 @@ compose.resources {
     packageOfResClass = "com.music.bitchord.sharedui.resources"
     generateResClass = always
 }
+
+/*
+ * sharedUi's own parity entry points, mirroring the app module's
+ * i18nParityTest / localeCoverage (see app/build.gradle.kts).
+ *
+ * The parity test itself (SharedUiStringsTest in sharedUi/src/jvmTest) is an
+ * ordinary unit-test source set, so it already runs under `check` — but the
+ * dedicated task is the named entry point, so neither CI nor the next person
+ * has to rediscover it, and `check` carries the promise explicitly.
+ */
+val sharedUiI18nParityTest = tasks.register("sharedUiI18nParityTest") {
+    group = "verification"
+    description = "Runs the sharedUi locale parity test (SharedUiStringsTest, JVM target)."
+    dependsOn("jvmTest")
+}
+
+/*
+ * The same coverage table as the app's localeCoverage, pointed at this
+ * module's compose-resource catalogues. Prints rather than fails —
+ * SharedUiStringsTest is the one that fails — because the point here is to
+ * see HOW FAR a language is behind, not just that it is.
+ *
+ * Reads the XML by hand rather than through the resource system: the numbers
+ * must come from exactly the files a translator would edit, and this runs on
+ * a machine with no device attached.
+ */
+tasks.register("sharedUiLocaleCoverage") {
+    group = "verification"
+    description = "Prints expected vs present translatable string keys per sharedUi locale catalogue."
+    doLast {
+        val resDir = file("src/commonMain/composeResources")
+        val baseFile = resDir.resolve("values/strings.xml")
+
+        val parser = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        // Keys that need translating: `translatable="false"` entries are excluded,
+        // matching what SharedUiStringsTest counts as must-translate.
+        fun translatableKeys(file: File): Set<String> {
+            val keys = mutableSetOf<String>()
+            val doc = parser.parse(file)
+            for (tagName in listOf("string", "plurals", "string-array")) {
+                val nodes = doc.getElementsByTagName(tagName)
+                for (i in 0 until nodes.length) {
+                    val element = nodes.item(i) as org.w3c.dom.Element
+                    if (element.getAttribute("translatable") == "false") continue
+                    val name = element.getAttribute("name")
+                    if (name.isNotEmpty()) keys.add(name)
+                }
+            }
+            return keys
+        }
+
+        val baseKeys = translatableKeys(baseFile)
+        logger.lifecycle("")
+        logger.lifecycle("sharedUi locale key coverage against values/strings.xml (${baseKeys.size} translatable keys)")
+        logger.lifecycle("")
+        logger.lifecycle("${"catalogue".padEnd(14)}${"present".padEnd(10)}missing")
+        resDir.listFiles { f -> f.isDirectory && f.name.startsWith("values-") }
+            ?.sortedBy { it.name }
+            ?.forEach { dir ->
+                val strings = dir.resolve("strings.xml")
+                if (!strings.isFile) {
+                    logger.lifecycle("${dir.name.padEnd(14)}${"-".padEnd(10)}(no strings.xml)")
+                    return@forEach
+                }
+                val present = translatableKeys(strings)
+                val missing = baseKeys - present
+                val shown = missing.sorted().take(12)
+                logger.lifecycle(
+                    "${dir.name.padEnd(14)}" +
+                        "${"${present.size}/${baseKeys.size}".padEnd(10)}" +
+                        "${missing.size} missing" +
+                        if (missing.isEmpty()) "" else "  e.g. ${shown.joinToString()}${if (missing.size > shown.size) " ." else ""}",
+                )
+            }
+        logger.lifecycle("")
+    }
+}
+
+// `check` already runs the jvmTest source set, SharedUiStringsTest included;
+// depending on the dedicated task makes that promise explicit and keeps the
+// two entry points from drifting apart.
+tasks.named("check") { dependsOn(sharedUiI18nParityTest) }
