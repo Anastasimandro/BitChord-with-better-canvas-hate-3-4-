@@ -90,7 +90,7 @@
     <string name="tv_latest_release">Dernière version</string>
     <string name="tv_top_songs">Meilleures chansons</string>
     <string name="tv_about_artist">À propos de %1$s</string>
-    <string name="tv_subscribe">S'abonner</string>
+    <string name="tv_subscribe">S\'abonner</string>
     <string name="tv_unsubscribe">Se désabonner</string>
     <string name="tv_shuffle">Aléatoire</string>
     <string name="tv_play">Lecture</string>
@@ -173,7 +173,7 @@
     <string name="tv_play_last">Lire en dernier</string>
     <string name="tv_start_station">Station de départ</string>
     <string name="tv_unlove">Ne plus aimer</string>
-    <string name="tv_love">J'aime</string>
+    <string name="tv_love">J\'aime</string>
     <string name="tv_add_to_playlist">Ajouter à la playlist</string>
     <string name="tv_go_to_album">Aller à l\'album</string>
     <string name="tv_go_to_artist">Aller à l\'artiste</string>
@@ -289,7 +289,7 @@
     <string name="tv_refresh_smooth_60">Lisse 60 Hz</string>
     <string name="tv_refresh_smooth_60_desc">Demande un mouvement d’interface standard de 60 Hz à une résolution native.</string>
     <string name="tv_refresh_ultra_120">Ultra 120 Hz</string>
-    <string name="tv_refresh_ultra_120_desc">Demande jusqu\'à 120 ips pour le mouvement de l\'interface sur les écrans compatibles. La vidéo sur toile conserve la fréquence d’images de la source native.</string>
+    <string name="tv_refresh_ultra_120_desc">Demande jusqu\'à 120 ips pour le mouvement de l\'interface sur les écrans compatibles. La vidéo sur toile conserve la fréquence d\'images de la source native.</string>
 
     <!-- Nickname validation -->
     <string name="tv_nickname_empty">Le pseudo ne peut pas être vide</string>
