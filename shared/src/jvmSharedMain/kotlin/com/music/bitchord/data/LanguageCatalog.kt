@@ -19,8 +19,7 @@ import java.util.Locale
 /** Language tag paired with an optional display-name override.
  *
  * Tags carry a region (`zh-CN` / `zh-TW`, not bare `zh-Hans` / `zh-Hant`):
- * Android Views understand script qualifiers (`values-b+zh+Hant`) but the
- * shared Compose resources only match language + region, so a region-less
+ * the shared Compose resources only match language + region, so a region-less
  * script tag shows Traditional in Settings and Simplified on the player.
  * [LocaleTags.normalizeAppTag] maps both forms to the same script downstream.
  *

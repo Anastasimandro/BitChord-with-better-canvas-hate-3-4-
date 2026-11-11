@@ -49,6 +49,13 @@ jobs:
         # gap next to their results.
         run: ./gradlew testDevDebugUnitTest :app:localeCoverage
 
+      # The language-system redesign (docs/language-system-prompts/) acceptance
+      # battery: every Gradle module that ships strings is assembled here in
+      # one go. The modules carry a dev/prod env flavor, so the flavor-scoped
+      # DevDebug tasks stand in for the bare assembleDebug names.
+      - name: Acceptance build battery
+        run: ./gradlew :app:assembleDevDebug :wearos:assembleDevDebug :tv:assembleDevDebug
+
       - name: Build the dev APK
         run: ./gradlew assembleDevDebug
 

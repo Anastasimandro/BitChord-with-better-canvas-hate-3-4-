@@ -95,5 +95,16 @@ class LocalizationTest {
                 configuredLocales.contains(lang.tag),
             )
         }
+
+        // Bare "zh" is not listed: the only writers of per-app locales are
+        // AppLanguageDialog (catalog tags zh-CN/zh-TW only) and the one-time
+        // script-tag migration in BitChordApplication (zh-Hant→zh-TW,
+        // zh-Hans→zh-CN). Nothing can produce a bare "zh" entry, and
+        // LocaleTags.normalizeAppTag maps any persisted legacy "zh" to
+        // Simplified before it could ever be written back.
+        assertTrue(
+            "locales_config.xml must not carry a bare 'zh' entry",
+            !configuredLocales.contains("zh"),
+        )
     }
 }
