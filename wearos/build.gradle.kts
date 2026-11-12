@@ -32,7 +32,13 @@ val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
 android {
     namespace = "com.music.bitchord.wear"
-    compileSdk = 36
+    // 37, not 36: :shared's api InnerTubeX dependency declares minCompileSdk
+    // 37 in its AAR metadata, so every consumer must compile against 37 —
+    // :app and :tv already do. AGP 8.10's recommendation of 36 is suppressed
+    // repo-wide (android.suppressUnsupportedCompileSdk in gradle.properties).
+    // targetSdk stays 36: compileSdk widens the API surface, targetSdk is
+    // what opts the app into new runtime behavior.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.music.bitchord"
