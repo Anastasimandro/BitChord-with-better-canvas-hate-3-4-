@@ -1,6 +1,7 @@
 package com.music.bitchord.data.lyrics
 
 import com.music.bitchord.data.Http
+import com.music.bitchord.data.LocaleTags
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -137,10 +138,11 @@ object LyricsTranslation {
         targetLanguageTag: String,
     ): Result {
         // Sent as given rather than reduced to a base language: zh-CN and
-        // zh-TW are the same language in two scripts, and canonicalising either
-        // to "zh" hands back Simplified whichever one was asked for. The
-        // narrowing is still done, but only where it belongs — in
-        // [sameLanguage], which is asking a different question.
+        // zh-TW are the same language in two scripts, and reducing either
+        // to "zh" hands back Simplified whichever one was asked for. "Already
+        // in your language" is therefore decided script-aware (zh-TW lyrics
+        // are not offered to a zh-CN reader) through
+        // [LocaleTags.sameLanguageScriptAware].
         val target = targetLanguageTag.trim()
         if (target.isBlank() || lines.isEmpty()) return Result.Unavailable
 
@@ -151,7 +153,7 @@ object LyricsTranslation {
             memory.put(cacheKey, it)
         }
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
-            return if (sameLanguage(cached.sourceLanguage, target)) {
+            return if (LocaleTags.sameLanguageScriptAware(cached.sourceLanguage, target)) {
                 Result.SameLanguage(cached.sourceLanguage)
             } else {
                 Result.Translated(
@@ -173,7 +175,7 @@ object LyricsTranslation {
         if (answers.any { it == null }) return Result.Unavailable
         val complete = answers.filterNotNull()
         val source = complete
-            .groupBy { canonicalLanguage(it.sourceLanguage) }
+            .groupBy { LocaleTags.normalizeAppTag(it.sourceLanguage) }
             .maxByOrNull { (_, values) -> values.sumOf { it.sourceWeight } }
             ?.key
             .orEmpty()
@@ -191,7 +193,7 @@ object LyricsTranslation {
         // transforms more of the song, so names and genuinely bilingual lyrics
         // do not get worse merely because they contain Latin text.
         if (
-            !sameLanguage(source, target) &&
+            !LocaleTags.sameLanguageScriptAware(source, target) &&
             predominantlyLatin(slots) &&
             unchangedWeight(slots, translated) * 3 >= slots.sumOf { it.text.length }
         ) {
@@ -212,7 +214,7 @@ object LyricsTranslation {
         memory.put(cacheKey, entry)
         writeCache(cacheKey, entry)
 
-        return if (sameLanguage(source, target)) {
+        return if (LocaleTags.sameLanguageScriptAware(source, target)) {
             Result.SameLanguage(source)
         } else {
             Result.Translated(
@@ -259,7 +261,7 @@ object LyricsTranslation {
         if (answers.any { it == null }) return RomanizationResult.Unavailable
         val complete = answers.filterNotNull()
         val source = complete
-            .groupBy { canonicalLanguage(it.sourceLanguage) }
+            .groupBy { LocaleTags.normalizeAppTag(it.sourceLanguage) }
             .maxByOrNull { (_, values) -> values.sumOf { it.sourceWeight } }
             ?.key
             .orEmpty()
@@ -413,7 +415,10 @@ object LyricsTranslation {
         sourceLanguage: String,
         target: String,
     ): List<String>? = coroutineScope {
-        val source = canonicalLanguage(sourceLanguage)
+        // Input Tools' transliteration codes are region-spelled for Chinese
+        // ("zh-CN-t-i0-und" / "zh-TW-t-i0-und"), so the wire helper — not a
+        // base-language reduction — builds the `itc` value.
+        val source = LocaleTags.ytHl(sourceLanguage)
         if (source.isBlank() || source == "en") return@coroutineScope null
         val answers = batches.chunked(MAX_PARALLEL_REQUESTS).flatMap { group ->
             group.map { batch ->
@@ -545,18 +550,6 @@ object LyricsTranslation {
         val start = source.words.first().startMs
         return listOf(LyricWord(start, source.words.last().endMs, translated))
     }
-
-    private fun canonicalLanguage(tag: String): String = when (
-        Locale.forLanguageTag(tag.replace('_', '-')).language.lowercase(Locale.ROOT)
-    ) {
-        "iw" -> "he"
-        "in" -> "id"
-        "ji" -> "yi"
-        else -> Locale.forLanguageTag(tag.replace('_', '-')).language.lowercase(Locale.ROOT)
-    }
-
-    private fun sameLanguage(first: String, second: String): Boolean =
-        canonicalLanguage(first) == canonicalLanguage(second)
 
     private fun cacheKey(trackId: String, target: String, slots: List<TextSlot>): String {
         val source = buildString {

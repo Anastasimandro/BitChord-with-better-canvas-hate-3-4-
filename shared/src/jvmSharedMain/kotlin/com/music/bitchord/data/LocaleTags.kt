@@ -18,7 +18,8 @@ object LocaleTags {
     /**
      * Normalize any incoming tag ("zh_TW", "zh-HK", "zh", "zh-Hant-TW", ...)
      * to "zh-Hant" / "zh-Hans" / base language. Bare "zh" stays "zh-Hans"
-     * because every existing zh catalogue is Simplified.
+     * because every existing zh catalogue is Simplified. Legacy Google
+     * spellings (`iw`, `in`, `ji`, `jw`) land on their modern codes.
      */
     fun normalizeAppTag(raw: String?): String {
         val tag = raw?.trim()?.replace('_', '-')?.takeIf { it.isNotBlank() } ?: return "en"
@@ -39,6 +40,7 @@ object LocaleTags {
             "iw" -> "he"
             "in" -> "id"
             "ji" -> "yi"
+            "jw" -> "jv"
             else -> base.ifBlank { "en" }
         }
     }

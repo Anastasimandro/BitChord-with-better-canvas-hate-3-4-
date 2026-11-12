@@ -831,7 +831,10 @@ object Innertube {
             parameter("cbrver", "141.0.0.0")
             parameter("cos", "Windows")
             parameter("cosver", "10.0")
-            parameter("hl", currentLanguage.replace('-', '_'))
+            // currentLanguage is already the wire spelling (LocaleTags.ytHl:
+            // zh-TW / zh-CN, hyphenated); the stats endpoint takes the same
+            // form the web client sends.
+            parameter("hl", currentLanguage)
             parameter("cr", currentRegion)
             extras()
             statsHeaders(session)
