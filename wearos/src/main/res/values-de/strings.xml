@@ -40,4 +40,5 @@
     <string name="update_channel">Updates</string>
     <string name="update_ready">BitChord-Update bereit</string>
     <string name="update_tap">Tippe, um das Update von deinem Telefon zu installieren.</string>
+    <string name="app_language">App-Sprache</string>
 </resources>

@@ -1,6 +1,8 @@
 package com.music.bitchord.wear.ui
 
 import androidx.annotation.DrawableRes
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,6 +43,11 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import com.music.bitchord.wear.R
+import com.music.bitchord.data.AppLanguage
+import com.music.bitchord.data.LocaleTags
+import com.music.bitchord.data.SUPPORTED_LANGUAGES
+import com.music.bitchord.data.languageDisplayName
+import com.music.bitchord.data.selfDisplayName
 import com.music.bitchord.wear.data.NowPlaying
 import com.music.bitchord.wear.data.PhoneOutput
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.music.bitchord.wear.data.PhoneLink
 import com.music.bitchord.wear.data.Queue
 import com.music.bitchord.wear.data.QueueRow
+import java.util.Locale
 
 /**
  * Up Next. Text first, thumbnails a beat later — see PhoneLink.applyQueue —
@@ -132,9 +140,21 @@ private fun QueueCell(row: QueueRow, isCurrent: Boolean, isPast: Boolean, onClic
 
 /** Shuffle, repeat and love, with the state each is in on the phone. */
 @Composable
-fun MoreScreen(np: NowPlaying?, link: PhoneLink, onOpenOutput: () -> Unit) {
+fun MoreScreen(np: NowPlaying?, link: PhoneLink, onOpenOutput: () -> Unit, onOpenLanguage: () -> Unit) {
     val state = rememberScalingLazyListState(initialCenterItemIndex = 1)
     val onWatch by link.watchSpeaker.collectAsStateWithLifecycle()
+    // The More row's value: the current language's own spelling. The picker
+    // screen reads it again when it opens, so nothing is cached across a
+    // locale change here.
+    val currentTag = remember {
+        LocaleTags.normalizeAppTag(
+            AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag()
+                ?: Locale.getDefault().toLanguageTag(),
+        )
+    }
+    val currentLanguage = SUPPORTED_LANGUAGES
+        .firstOrNull { LocaleTags.normalizeAppTag(it.tag) == currentTag }
+        ?.selfDisplayName() ?: currentTag
     ScreenScaffold(scrollState = state) { padding ->
         ScalingLazyColumn(
             state = state,
@@ -150,6 +170,15 @@ fun MoreScreen(np: NowPlaying?, link: PhoneLink, onOpenOutput: () -> Unit) {
                     value = stringResource(if (onWatch) R.string.this_watch else R.string.on_phone_output),
                     active = false,
                     onClick = onOpenOutput,
+                )
+            }
+            item(key = "language") {
+                ToggleCell(
+                    icon = R.drawable.ic_language,
+                    label = stringResource(R.string.app_language),
+                    value = currentLanguage,
+                    active = false,
+                    onClick = onOpenLanguage,
                 )
             }
             if (np == null) {
@@ -391,6 +420,87 @@ private fun OutputCell(
         Column(Modifier.weight(1f)) {
             Text(label, style = WearType.row, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(detail, style = WearType.rowSub, color = Secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (selected) {
+            Icon(
+                painterResource(R.drawable.ic_check),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The watch's own language picker: the shared catalog, the same rows the
+ * phone's AppLanguageDialog offers. Tapping a row applies it through
+ * [AppCompatDelegate.setApplicationLocales] — the single writer the phone
+ * and TV use — and closes. On Wear OS 4+ (API 33+) the system applies the
+ * locale and recreates the activity into the new language.
+ */
+@Composable
+fun LanguageScreen(onDone: () -> Unit) {
+    val state = rememberScalingLazyListState(initialCenterItemIndex = 1)
+    // Full script tag (zh-Hans / zh-Hant preserved); legacy bare "zh" reads
+    // as Simplified — the same normalization the phone's dialog applies.
+    val current = remember {
+        LocaleTags.normalizeAppTag(
+            AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag()
+                ?: Locale.getDefault().toLanguageTag(),
+        )
+    }
+    val displayLocale = remember(current) { Locale.forLanguageTag(current) }
+    ScreenScaffold(scrollState = state) { padding ->
+        ScalingLazyColumn(
+            state = state,
+            contentPadding = padding,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.background(Color.Black),
+        ) {
+            item(key = "header") { Header(stringResource(R.string.app_language)) }
+            items(SUPPORTED_LANGUAGES, key = { it.tag }) { language ->
+                val nativeName = language.selfDisplayName()
+                val localizedName = languageDisplayName(language.tag, displayLocale)
+                LanguageCell(
+                    language = language,
+                    // The subtitle is the row's own language named in the
+                    // language the picker is being read in — shown only when
+                    // it reads differently, as the phone's rows do.
+                    detail = if (localizedName.equals(nativeName, ignoreCase = true)) "" else localizedName,
+                    selected = LocaleTags.normalizeAppTag(language.tag) == current,
+                    onClick = {
+                        AppCompatDelegate.setApplicationLocales(
+                            LocaleListCompat.forLanguageTags(language.tag),
+                        )
+                        onDone()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageCell(language: AppLanguage, detail: String, selected: Boolean, onClick: () -> Unit) {
+    Cell(onClick = onClick) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = language.selfDisplayName(),
+                style = WearType.row,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (detail.isNotBlank()) {
+                Text(
+                    text = detail,
+                    style = WearType.rowSub,
+                    color = Secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (selected) {
             Icon(

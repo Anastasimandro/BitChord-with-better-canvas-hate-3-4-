@@ -34,6 +34,15 @@ class WearViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() = link.stop()
 }
 
+/**
+ * Per-app locale: the picker in More writes through
+ * [androidx.appcompat.app.AppCompatDelegate.setApplicationLocales], and the
+ * manifest's AppLocalesMetadataHolderService (autoStoreLocales) keeps it
+ * across launches. On Wear OS 4+ (API 33+) the system applies the locale and
+ * recreates this activity itself; below that appcompat records the choice
+ * and it applies at the next full launch. Either way the view model outlives
+ * the recreate, so the last player state stays drawn (see [WearViewModel.link]).
+ */
 class WearActivity : ComponentActivity() {
 
     private val model: WearViewModel by viewModels()

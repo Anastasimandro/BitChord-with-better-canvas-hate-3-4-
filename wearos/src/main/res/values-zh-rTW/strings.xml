@@ -40,4 +40,5 @@
     <string name="update_channel">更新</string>
     <string name="update_ready">BitChord 更新已就緒</string>
     <string name="update_tap">點按以從手機安裝更新。</string>
+    <string name="app_language">應用語言</string>
 </resources>

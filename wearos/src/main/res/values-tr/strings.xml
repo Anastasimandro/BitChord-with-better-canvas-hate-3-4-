@@ -40,4 +40,5 @@
     <string name="update_channel">Güncellemeler</string>
     <string name="update_ready">BitChord güncellemesi hazır</string>
     <string name="update_tap">Güncellemeyi telefonunuzdan yüklemek için dokunun.</string>
+    <string name="app_language">Uygulama dili</string>
 </resources>

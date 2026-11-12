@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.tv.screens
 
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,10 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.R
 import com.music.bitchord.data.AppUpdateChecker
+import com.music.bitchord.data.LocaleTags
+import com.music.bitchord.data.languageDisplayNameDetailed
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.TvSettings
 import com.music.bitchord.ui.MainViewModel
@@ -38,6 +43,7 @@ import com.music.bitchord.ui.tv.components.TvListHeader
 import com.music.bitchord.ui.tv.components.TvListRow
 import com.music.bitchord.ui.tv.dialogs.TvAboutDialog
 import com.music.bitchord.ui.tv.dialogs.TvEqualizerDialog
+import com.music.bitchord.ui.tv.dialogs.TvLanguageDialog
 import com.music.bitchord.ui.tv.dialogs.TvLyricsSourcesDialog
 import com.music.bitchord.ui.tv.dialogs.TvRefreshRateDialog
 import com.music.bitchord.ui.tv.dialogs.TvScrobbleDialog
@@ -49,9 +55,10 @@ import com.music.bitchord.ui.tv.personalization.AppThemeOption
 import com.music.bitchord.ui.tv.theme.TvDimensions
 import com.music.bitchord.ui.tv.theme.TvGlass
 import com.music.bitchord.ui.tv.theme.TvType
+import java.util.Locale
 
 // Discord Rich Presence is hidden on TV for now; TvDiscordDialog is kept for when it returns.
-private enum class SettingsSheet { Theme, RefreshRate, Equalizer, Scrobbling, LyricsSources, Update, About }
+private enum class SettingsSheet { Theme, RefreshRate, Equalizer, Scrobbling, LyricsSources, Update, About, Language }
 
 private const val DefaultBlurb = "Playback, sound and display preferences for BitChord on this TV."
 
@@ -94,6 +101,18 @@ fun TvSettingsScreen(
     var blurb by remember { mutableStateOf(DefaultBlurb) }
     var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
     val update by AppUpdateChecker.available.collectAsState()
+
+    // The language row's summary, named from the platform's own data, script
+    // included ("Chinese (Simplified)") — mirroring the phone's settings
+    // sheet. Recomputed on recreate, which a locale change always triggers.
+    val languageSummary = remember {
+        languageDisplayNameDetailed(
+            LocaleTags.normalizeAppTag(
+                AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag()
+                    ?: Locale.getDefault().toLanguageTag(),
+            ),
+        )
+    }
 
     Row(
         modifier = modifier
@@ -331,6 +350,14 @@ fun TvSettingsScreen(
             }
 
             item { TvListHeader("General") }
+            item {
+                TvListRow(
+                    title = stringResource(R.string.app_language),
+                    subtitle = languageSummary,
+                    onFocused = { blurb = "The language BitChord's interface uses. Select to change it." },
+                    onClick = { sheet = SettingsSheet.Language },
+                )
+            }
             if (update != null) {
                 item {
                     TvListRow(
@@ -367,6 +394,7 @@ fun TvSettingsScreen(
         SettingsSheet.LyricsSources -> TvLyricsSourcesDialog(onDismiss = { sheet = null })
         SettingsSheet.Update -> update?.let { TvUpdateDialog(update = it, onDismiss = { sheet = null }) }
         SettingsSheet.About -> TvAboutDialog(onDismiss = { sheet = null })
+        SettingsSheet.Language -> TvLanguageDialog(onDismiss = { sheet = null })
         null -> Unit
     }
 }

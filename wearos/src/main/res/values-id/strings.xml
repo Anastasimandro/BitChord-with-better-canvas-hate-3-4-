@@ -40,4 +40,5 @@
     <string name="update_channel">Pembaruan</string>
     <string name="update_ready">Pembaruan BitChord siap</string>
     <string name="update_tap">Ketuk untuk memasang pembaruan dari ponsel Anda.</string>
+    <string name="app_language">Bahasa aplikasi</string>
 </resources>

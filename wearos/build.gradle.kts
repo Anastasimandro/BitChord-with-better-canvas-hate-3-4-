@@ -152,6 +152,16 @@ dependencies {
     // NowPlayingListener: our icon on the watch face, opening our player.
     implementation("androidx.wear:wear-ongoing:1.1.0")
 
+    // The language picker reads the shared catalog (SUPPORTED_LANGUAGES) —
+    // the same list the phone and TV offer. The rest of what :shared brings
+    // (network stack, extractors) is unused here and R8 strips it; wear's
+    // debug build is minified too.
+    implementation(project(":shared"))
+    // AppCompatDelegate.setApplicationLocales: the one writer of the per-app
+    // locale, same as the phone and TV — pairs with the manifest's
+    // AppLocalesMetadataHolderService.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+
     // The watch as the speaker: a player reading from the phone, in a session
     // so it plays on with the screen off. Same Media3 as the phone app.
     implementation("androidx.media3:media3-exoplayer:1.11.0")

@@ -45,6 +45,7 @@ private const val PLAYER = "player"
 private const val QUEUE = "queue"
 private const val MORE = "more"
 private const val OUTPUT = "output"
+private const val LANGUAGE = "language"
 
 /** Player at the root; Up Next and More swipe away back to it, as every watch app does. */
 @Composable
@@ -80,11 +81,20 @@ fun WearApp(link: PhoneLink) {
                 )
             }
             composable(MORE) {
-                MoreScreen(np = np, link = link, onOpenOutput = { nav.navigate(OUTPUT) })
+                MoreScreen(
+                    np = np,
+                    link = link,
+                    onOpenOutput = { nav.navigate(OUTPUT) },
+                    onOpenLanguage = { nav.navigate(LANGUAGE) },
+                )
             }
             composable(OUTPUT) {
                 // Straight back to the player once a choice is made.
                 OutputScreen(link = link, onDone = { nav.popBackStack(PLAYER, inclusive = false) })
+            }
+            composable(LANGUAGE) {
+                // Back to More, where the language row shows what was picked.
+                LanguageScreen(onDone = { nav.popBackStack() })
             }
         }
         }

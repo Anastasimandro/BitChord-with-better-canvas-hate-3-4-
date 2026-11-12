@@ -40,4 +40,5 @@
     <string name="update_channel">עדכונים</string>
     <string name="update_ready">עדכון BitChord מוכן</string>
     <string name="update_tap">הקש כדי להתקין את העדכון מהטלפון.</string>
+    <string name="app_language">שפת האפליקציה</string>
 </resources>

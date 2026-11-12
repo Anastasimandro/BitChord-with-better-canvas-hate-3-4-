@@ -40,4 +40,5 @@
     <string name="update_channel">Обновления</string>
     <string name="update_ready">Обновление BitChord готово</string>
     <string name="update_tap">Нажмите, чтобы установить обновление с телефона.</string>
+    <string name="app_language">Язык приложения</string>
 </resources>
