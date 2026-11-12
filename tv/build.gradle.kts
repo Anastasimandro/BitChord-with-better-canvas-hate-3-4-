@@ -259,7 +259,10 @@ android {
 configure<AppExtension> {
     applicationVariants.all {
         if (buildType.name == "release" && flavorName == "prod") {
-            val rawVersion = (rootProject.extra["bitchordVersionName"] as String).removePrefix("v")
+            // The beta suffix is part of the tag (v2.0.0-beta1), so it is part
+            // of the filename the release staging looks for.
+            val rawVersion = (rootProject.extra["bitchordVersionName"] as String).removePrefix("v") +
+                if (betaSuffix.isNotEmpty()) "-$betaSuffix" else ""
             outputs.all {
                 val outputImpl = this as? BaseVariantOutputImpl
                 val abi = outputImpl?.getFilter("ABI")

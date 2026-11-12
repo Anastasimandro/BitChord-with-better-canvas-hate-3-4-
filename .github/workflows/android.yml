@@ -152,16 +152,22 @@ jobs:
           echo "Gradle version: $GRADLE_VER"
           echo "Beta suffix : '${BETA_SUFFIX}'"
 
-          if [ "$TAG_VER" != "$GRADLE_VER" ]; then
-            echo "::error::Tag ($TAG_VER) does not match bitchordVersionName ($GRADLE_VER) in root build.gradle.kts"
+          if [ "$TAG_VER" != "$GRADLE_VER" ] && [ "$TAG_VER" != "$GRADLE_VER-$BETA_SUFFIX" ]; then
+            echo "::error::Tag ($TAG_VER) does not match bitchordVersionName ($GRADLE_VER) — or, with the beta suffix set, '$GRADLE_VER-$BETA_SUFFIX'"
             exit 1
           fi
           if [ -n "$BETA_SUFFIX" ]; then
-            echo "::error::bitchordBetaSuffix is not empty ('$BETA_SUFFIX') — clear it before cutting a release"
-            exit 1
+            # Beta cut: the tag is v<versionName>-<suffix> and the release is
+            # published as a prerelease, which the in-app updater's
+            # releases/latest poll ignores. Testers sideload it by hand.
+            echo "RELEASE_PRERELEASE=true" >> $GITHUB_ENV
+            echo "RELEASE_MAKE_LATEST=false" >> $GITHUB_ENV
+          else
+            echo "RELEASE_PRERELEASE=false" >> $GITHUB_ENV
+            echo "RELEASE_MAKE_LATEST=true" >> $GITHUB_ENV
           fi
 
-          echo "RELEASE_TAG=v$GRADLE_VER" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v$TAG_VER" >> $GITHUB_ENV
           echo "RELEASE_VERSION=$GRADLE_VER" >> $GITHUB_ENV
 
       - name: Grant execute permission for gradlew
@@ -233,9 +239,9 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
-          make_latest: true
+          make_latest: ${{ env.RELEASE_MAKE_LATEST }}
           draft: false
-          prerelease: false
+          prerelease: ${{ env.RELEASE_PRERELEASE }}
           files: dist/*
 
       - name: Upload Phone & Wear Artifacts
@@ -295,8 +301,15 @@ jobs:
           fi
 
       - name: Determine Release Tag
+        # Same derivation the phone job validates: versionName, plus the beta
+        # suffix when one is set, so both jobs attach to the same tag
+        # (v2.0.0-beta1 during a beta window, v2.0.0 for the clean release).
         run: |
           GRADLE_VER=$(grep 'extra\["bitchordVersionName"\]' build.gradle.kts | head -n 1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+          BETA_SUFFIX=$(grep 'extra\["bitchordBetaSuffix"\]' build.gradle.kts | head -n 1 | sed -E 's/.*=[[:space:]]*"([^"]*)".*/\1/')
+          if [ -n "$BETA_SUFFIX" ]; then
+            GRADLE_VER="$GRADLE_VER-$BETA_SUFFIX"
+          fi
           echo "RELEASE_TAG=v$GRADLE_VER" >> $GITHUB_ENV
 
       - name: Grant execute permission for gradlew

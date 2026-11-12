@@ -41,8 +41,8 @@ buildscript {
  * No "v" in the name — the in-app updater reads it as a number; the "v" is the
  * release tag's alone.
  */
-extra["bitchordVersionCode"] = 40
-extra["bitchordVersionName"] = "1.9.4"
+extra["bitchordVersionCode"] = 41
+extra["bitchordVersionName"] = "2.0.0"
 
 /*
  * Bump this by hand before cutting each sideloaded test build ("beta2",
@@ -62,8 +62,13 @@ extra["bitchordVersionName"] = "1.9.4"
  * The watch app carries the same marker. It needs no prompt logic of its own:
  * the phone compares the watch's installed APK with the one it carries, so a
  * beta watch app shows "Update available" as soon as the phone has the release.
+ *
+ * Cutting a beta through the release pipeline is supported: tag
+ * v<versionName>-<this value> (e.g. v2.0.0-beta1) and the pipeline publishes
+ * the build as a GitHub prerelease, which "releases/latest" ignores — testers
+ * sideload it from the release page by hand.
  */
-extra["bitchordBetaSuffix"] = ""
+extra["bitchordBetaSuffix"] = "beta1"
 
 plugins {
     id("com.android.application") version "8.10.1" apply false
