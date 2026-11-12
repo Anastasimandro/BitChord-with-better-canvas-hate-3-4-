@@ -51,7 +51,33 @@ jobs:
         # sharedUiI18nParityTest task in sharedUi/build.gradle.kts), with its
         # own coverage table. :shared:jvmTest carries LocaleTagsTest (part 2's
         # tag-normalization guard) and the shared module's other JVM tests.
-        run: ./gradlew testDevDebugUnitTest :shared:jvmTest :app:localeCoverage :sharedUi:jvmTest :sharedUi:sharedUiLocaleCoverage
+        # --continue so every task reports independently; the log is kept and
+        # the diagnostics step below surfaces errors as annotations.
+        run: ./gradlew testDevDebugUnitTest :shared:jvmTest :app:localeCoverage :sharedUi:jvmTest :sharedUi:sharedUiLocaleCoverage --continue 2>&1 | tee gradle-tests.log
+
+      - name: Test failure diagnostics
+        # The job log is not readable via the public API without a token, so
+        # anything a remote maintainer needs to see goes out as annotations
+        # and into the run summary instead.
+        if: failure()
+        run: |
+          echo "## Gradle failures" >> "$GITHUB_STEP_SUMMARY"
+          grep -nE "^> Task .*(FAILED)|error:|e: |FAILED [0-9]+ tests|Execution failed for task" gradle-tests.log | head -80 >> "$GITHUB_STEP_SUMMARY" || true
+          grep -nE "error:|e: |Execution failed for task" gradle-tests.log | head -40 || true
+          while IFS= read -r line; do echo "::error::${line//\"/\'}"; done < <(grep -E "error:|e: |Execution failed for task" gradle-tests.log | head -20)
+          echo "## Failing test XMLs" >> "$GITHUB_STEP_SUMMARY"
+          found=0
+          for f in $(find . -path '*/build/test-results/*' -name '*.xml' 2>/dev/null); do
+            if grep -q '<failure' "$f"; then
+              found=1
+              echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+              grep -A3 '<failure' "$f" | head -20 >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::failing test results: $f"
+            fi
+          done
+          if [ "$found" = "0" ]; then echo "(no failing test XMLs — the failure is before test execution)" >> "$GITHUB_STEP_SUMMARY"; fi
+          echo "## Test results present" >> "$GITHUB_STEP_SUMMARY"
+          find . -path '*/build/test-results/*' -name '*.xml' 2>/dev/null | head -40 >> "$GITHUB_STEP_SUMMARY" || true
 
       # The language-system redesign (docs/language-system-prompts/) acceptance
       # battery: every Gradle module that ships strings is assembled here in
@@ -74,7 +100,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-test-reports
-          path: app/build/reports/tests/
+          path: |
+            app/build/reports/tests/
+            shared/build/reports/tests/
+            sharedUi/build/reports/tests/
+          if-no-files-found: ignore
 
   backend:
     name: Backend · Go
