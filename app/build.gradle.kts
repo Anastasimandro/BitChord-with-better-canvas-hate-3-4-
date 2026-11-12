@@ -650,6 +650,60 @@ tasks.register("localeCoverage") {
                         if (missing.isEmpty()) "" else "  e.g. ${shown.joinToString()}${if (missing.size > shown.size) " …" else ""}",
                 )
             }
+
+        /*
+         * Untranslated-value report (non-blocking): locales whose value for a
+         * translatable key is identical to the English source. A report, not a
+         * failure — brand names, technical terms and genre words ("Discord",
+         * "Jazz", "Mono") are legitimately identical everywhere, so hard-failing
+         * would flood CI with noise for pre-existing catalogues. The point is
+         * to show a translator how much of a language is still sitting in
+         * English; the key-parity table above (and LocaleStringsTest) stay the
+         * hard gates.
+         */
+        fun valueTexts(file: File): Map<String, String> {
+            val doc = parser.parse(file)
+            val texts = mutableMapOf<String, String>()
+            val nodes = doc.getElementsByTagName("string")
+            for (i in 0 until nodes.length) {
+                val element = nodes.item(i) as org.w3c.dom.Element
+                val name = element.getAttribute("name")
+                if (name.isNotEmpty()) texts[name] = element.textContent
+            }
+            return texts
+        }
+
+        fun comparableText(text: String) = text.replace(Regex("\\s+"), " ").trim()
+
+        val english = valueTexts(baseFile)
+        logger.lifecycle("Untranslated values (identical to the English source — report only, no failure):")
+        var anyUntranslated = false
+        resDir.listFiles { f -> f.isDirectory && f.name.startsWith("values-") }
+            ?.sortedBy { it.name }
+            ?.forEach { dir ->
+                val strings = dir.resolve("strings.xml")
+                if (!strings.isFile) return@forEach
+                val identical = valueTexts(strings).entries.mapNotNull { (name, value) ->
+                    val en = english[name]
+                    if (
+                        en != null &&
+                        comparableText(en).isNotEmpty() &&
+                        comparableText(value) == comparableText(en)
+                    ) {
+                        name
+                    } else {
+                        null
+                    }
+                }.sorted()
+                if (identical.isEmpty()) return@forEach
+                anyUntranslated = true
+                val shown = identical.take(12)
+                logger.lifecycle(
+                    "  ${dir.name.padEnd(14)}${"${identical.size} identical".padEnd(14)}" +
+                        "e.g. ${shown.joinToString()}${if (identical.size > shown.size) " …" else ""}",
+                )
+            }
+        if (!anyUntranslated) logger.lifecycle("  (none)")
         logger.lifecycle("")
     }
 }

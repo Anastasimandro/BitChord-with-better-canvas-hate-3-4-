@@ -49,8 +49,9 @@ jobs:
         # gap next to their results. sharedUi's own parity test rides along
         # (:sharedUi:jvmTest runs SharedUiStringsTest — see the
         # sharedUiI18nParityTest task in sharedUi/build.gradle.kts), with its
-        # own coverage table.
-        run: ./gradlew testDevDebugUnitTest :app:localeCoverage :sharedUi:jvmTest :sharedUi:sharedUiLocaleCoverage
+        # own coverage table. :shared:jvmTest carries LocaleTagsTest (part 2's
+        # tag-normalization guard) and the shared module's other JVM tests.
+        run: ./gradlew testDevDebugUnitTest :shared:jvmTest :app:localeCoverage :sharedUi:jvmTest :sharedUi:sharedUiLocaleCoverage
 
       # The language-system redesign (docs/language-system-prompts/) acceptance
       # battery: every Gradle module that ships strings is assembled here in
