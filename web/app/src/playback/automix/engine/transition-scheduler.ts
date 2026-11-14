@@ -14,11 +14,15 @@ import {
   percentile,
   incomingGainCompensation,
   MAX_LUFS_COMPENSATION_DB,
+  type CurveView,
 } from './policy';
-import type { CurveView } from './policy';
 import type { MixStyle } from '../telemetry';
-import { chooseBassSwapBeat, shouldSuppressBassSwap } from './bass-swap';
-import type { BassSwapCurves, BassSwapParams } from './bass-swap';
+import {
+  chooseBassSwapBeat,
+  shouldSuppressBassSwap,
+  type BassSwapCurves,
+  type BassSwapParams,
+} from './bass-swap';
 
 export interface TransitionRequest {
   from: Deck;
