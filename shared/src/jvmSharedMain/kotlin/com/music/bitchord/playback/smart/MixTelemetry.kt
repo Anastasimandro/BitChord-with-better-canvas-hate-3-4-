@@ -85,6 +85,15 @@ object MixTelemetry {
          * planned — the analysis race Phase 1 fixes, counted per event.
          */
         val bothGridsReady: Boolean = false,
+        /**
+         * Phase 1: how many seconds before the transition's own start its plan
+         * first stood complete — the "planned by t-60" measure, read at the
+         * tick the plan became usable and stamped at arm time. Null when the
+         * plan never stood complete before the arm (it was assembled at the
+         * last moment, or this path had no plan to stand), which counts
+         * against the share exactly as a late plan does.
+         */
+        val plannedRemainingSec: Double? = null,
         var outcome: String = OUTCOME_IN_FLIGHT,
         /** Seconds from handoff to the user advancing the incoming track, or null. */
         var skipAfterSec: Double? = null,
@@ -254,7 +263,16 @@ object MixTelemetry {
         val topReasons: List<Pair<String, Int>>,
         /** Share of events planned with both grids ready: the analysis race. */
         val hitRate: Double,
+        /**
+         * Phase 1: share of completed events whose plan stood complete at
+         * least [PLANNED_BY_SEC] before its start — the acceptance bar the
+         * ladder exists to clear.
+         */
+        val plannedBy60Share: Double,
     )
+
+    /** A transition planned this close to its start still counts as late. */
+    const val PLANNED_BY_SEC = 60.0
 
     fun aggregate(all: List<TransitionEvent>): ReportStats {
         val completed = all.filter { it.outcome == OUTCOME_COMPLETED }
@@ -274,12 +292,17 @@ object MixTelemetry {
             }
         }
         val ready = all.count { it.bothGridsReady }
+        // Completed events only: an aborted mix never reached the transition
+        // its plan was for, so it says nothing about whether the plan was
+        // there in time. A null stamp reads as late — see the field.
+        val plannedEarly = completed.count { (it.plannedRemainingSec ?: 0.0) >= PLANNED_BY_SEC }
         return ReportStats(
             total = all.size,
             completed = completed.size,
             styles = styles,
             topReasons = reasons.entries.sortedByDescending { it.value }.take(5).map { it.key to it.value },
             hitRate = if (all.isNotEmpty()) ready.toDouble() / all.size else 0.0,
+            plannedBy60Share = if (completed.isNotEmpty()) plannedEarly.toDouble() / completed.size else 0.0,
         )
     }
 

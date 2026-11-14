@@ -148,6 +148,7 @@ import com.music.bitchord.data.sources.SourceStream
 import com.music.bitchord.data.sources.StreamFormat
 import com.music.bitchord.data.sources.TrackMatcher
 import com.music.bitchord.playback.smart.AutomixAnalysisSource
+import com.music.bitchord.playback.smart.AutomixWarmWorker
 import com.music.bitchord.playback.smart.VersionAudioAligner
 import com.music.bitchord.playback.smart.MixTelemetry
 import com.music.bitchord.widget.MediaWidget
@@ -7848,6 +7849,12 @@ class PlaybackService : MediaLibraryService() {
             saveQueueSnapshot(it)
             savePlaybackState(it)
         }
+        // Phase 1, L3: the queue is on disk now — send it through the analysis
+        // ladder while the device idles, so the next session's transitions are
+        // planned before their last minute instead of during it. Reads the
+        // queue back from [LastPlayed] at run time; no-ops on what is already
+        // measured.
+        AutomixWarmWorker.schedule(this)
         // And to leave the widgets showing a play button. Nothing else reports a
         // swipe-away, so a widget left on the home screen would sit there with a
         // pause glyph on a service that no longer exists.

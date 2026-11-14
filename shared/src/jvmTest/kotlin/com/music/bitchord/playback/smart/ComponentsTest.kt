@@ -65,6 +65,57 @@ class ComponentsTest {
         assertEquals(0, Components.adopt(instrumental).vocalVersion)
     }
 
+    /** One cheap edge window: [startSec] long from [from], at the detector's own frame rate. */
+    private fun cheapWindow(from: Double, startSec: Double) = CurveWindow(
+        from,
+        CheapVocal.CHEAP_FPS,
+        FloatArray((startSec * CheapVocal.CHEAP_FPS).toInt()) { 0.2f },
+    )
+
+    @Test
+    fun cheapWindowsCoveringBothEdgesHoldTheVocalComponent() {
+        val warmed = monolithic().copy(
+            vocalWindows = emptyList(),
+            cheapVocalWindows = listOf(cheapWindow(0.0, 30.0), cheapWindow(170.0, 30.0)),
+        )
+        assertTrue(Components.held(warmed).contains("vocal"))
+        assertFalse(Components.needsLevel2(warmed))
+        assertEquals(Components.VOCAL_VERSION, Components.adopt(warmed).vocalVersion)
+    }
+
+    @Test
+    fun cheapWindowsOnOneEdgeOnlyDoNotHold() {
+        val headOnly = monolithic().copy(
+            vocalWindows = emptyList(),
+            cheapVocalWindows = listOf(cheapWindow(0.0, 30.0)),
+        )
+        assertFalse(Components.held(headOnly).contains("vocal"))
+        assertTrue(Components.needsLevel2(headOnly))
+        // And a tail-only record is the same mid-ladder state on the other side.
+        val tailOnly = monolithic().copy(
+            vocalWindows = emptyList(),
+            cheapVocalWindows = listOf(cheapWindow(170.0, 30.0)),
+        )
+        assertFalse(Components.held(tailOnly).contains("vocal"))
+    }
+
+    @Test
+    fun cheapSliversAndFarOffWindowsAreNotEdgeEvidence() {
+        // A decode that came back two seconds long measured where the cache
+        // stopped, not where the music does.
+        val sliver = monolithic().copy(
+            vocalWindows = emptyList(),
+            cheapVocalWindows = listOf(cheapWindow(0.0, 2.0), cheapWindow(198.0, 2.0)),
+        )
+        assertFalse(Components.held(sliver).contains("vocal"))
+        // A window in the middle of the track describes neither edge.
+        val middle = monolithic().copy(
+            vocalWindows = emptyList(),
+            cheapVocalWindows = listOf(cheapWindow(60.0, 30.0), cheapWindow(95.0, 30.0)),
+        )
+        assertFalse(Components.held(middle).contains("vocal"))
+    }
+
     @Test
     fun aPreLoudnessRecordStillHoldsItsStructure() {
         // analysisVersion 0 says "before the versioned record existed"; the

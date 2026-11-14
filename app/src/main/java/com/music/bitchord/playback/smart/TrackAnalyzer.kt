@@ -444,7 +444,15 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                     val outcome = analyze(trackId, analysisUri, durationSeconds)
                     val whole = outcome.analysis
                     if (whole != null) {
-                        results[trackId] = whole
+                        // Stamped before it is served or stored: the versions
+                        // are the record's own claim about what it holds, and
+                        // both readers — the playback thread and the next
+                        // session's cache load — take them at their word.
+                        // [adopt] is the identity function on an already
+                        // stamped record, so this costs nothing in the common
+                        // case.
+                        val adopted = Components.adopt(whole)
+                        results[trackId] = adopted
                         provisional.remove(trackId)
                         shortDecodes.remove(trackId)
                         // Only the whole-track pass is persisted. A head result
@@ -452,7 +460,7 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                         // mix-out anchor, the energy curve — and storing one
                         // would freeze a deliberately partial answer in place of
                         // the complete one that supersedes it minutes later.
-                        store.save(trackId, whole)
+                        store.save(trackId, adopted)
                         restoreAttempted.add(trackId)
                     } else if (outcome.decodedShort &&
                         shortDecodes.merge(trackId, 1, Int::plus)!! >= MAX_SHORT_DECODE_ATTEMPTS
@@ -647,8 +655,16 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
      * genuinely measured here: the policy indexes the vocal mask against it and
      * counts audible seconds from it, and a curve that stops at 30 s would have
      * this track's *outgoing* half scored against a window it does not cover.
-     * A vocal mask therefore cannot come from this pass either, and waits for
+     * A vocal *mask* therefore cannot come from this pass either, and waits for
      * the whole-track one.
+     *
+     * Phase 1, L2: what this pass CAN publish is the cheap detector's curve
+     * over its own window, when open-unmix is not on the build. A curve over
+     * the opening is exactly what the incoming side of a transition reads,
+     * and it is not indexed against anything the pass refuses to store. It
+     * travels in [TrackAnalysis.cheapVocalWindows] without stamping
+     * `vocalVersion` — one edge is a mid-ladder state, not a whole component
+     * — and [Components.adopt] decides on load whether the record holds.
      */
     private fun analyzeHead(
         trackId: String,
@@ -740,6 +756,7 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
             mixInTime = entry?.mixInTime ?: 0.0,
             mixInCandidates = entry?.mixInCandidates.orEmpty(),
             headBeats = grid?.let { BeatSide(it.beats, it.downbeats, it.bpm, it.beatConfidence) },
+            cheapVocalWindows = listOfNotNull(head.cheapVocalWindow),
         )
     }
 
@@ -1157,6 +1174,7 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                 "downbeats=${headGrid?.downbeats?.size ?: 0}+${tailGrid?.downbeats?.size ?: 0} " +
                 "vocalMask=${if (regions.any { it.vocalMask != null }) "model" else "dsp"} " +
                 "windows=${regions.size} vocalWindows=${regions.count { it.vocalWindow != null }} " +
+                "cheapWindows=${regions.count { it.cheapVocalWindow != null }} " +
                 "lufs=${structural.lufs?.let { "%.1f".format(Locale.ROOT, it) }}",
         )
 
@@ -1186,16 +1204,21 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                 mixOutCandidates = features.mixOutCandidates,
                 energyCurve = features.energyCurve,
                 lowEnergyCurve = features.lowEnergyCurve,
-                // The model's mask where it ran, the DSP heuristic's where it didn't. Falling back to
-                // the heuristic rather than to nothing matters because the policy reads an
-                // absent mask and a neutral one identically — as "no evidence" — so a failed model
-                // pass would otherwise silently discard the estimate Phase 1 already had.
+                // The mask falls through three sources in order: the model's
+                // own mask where it ran, the cheap detector's windows over the
+                // energy curve where it didn't (Phase 1, L2), and only then
+                // the DSP heuristic. Falling back rather than stopping matters
+                // because the policy reads an absent mask and a neutral one
+                // identically — as "no evidence" — so a failed model pass
+                // would otherwise silently discard every estimate Phase 1 had.
                 vocalActivityMask = mergeMasks(features.energyCurve.size, regions.mapNotNull { it.vocalMask })
+                    ?: cheapVocalMask(features.energyCurve, regions.mapNotNull { it.cheapVocalWindow })
                     ?: features.vocalActivityMask.map(::heuristicVocalOnModelScale),
                 vocalProbability = features.vocalProbability,
                 headBeats = headSide,
                 tailBeats = tailSide,
                 vocalWindows = regions.mapNotNull { it.vocalWindow },
+                cheapVocalWindows = regions.mapNotNull { it.cheapVocalWindow },
                 levelWindows = regions.mapNotNull { it.levelWindow },
                 lufs = structural.lufs,
                 lufsHead = structural.lufsHead,
@@ -1219,6 +1242,8 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
         val start: Double = 0.0,
         /** The vocal model's raw output over this window, for the loop mix's vocal check. */
         val vocalWindow: CurveWindow? = null,
+        /** The cheap detector's output over this window, when the model is not available to. */
+        val cheapVocalWindow: CurveWindow? = null,
         /** RMS level over this window, for the loop mix's loudness check. */
         val levelWindow: CurveWindow? = null,
     )
@@ -1365,6 +1390,16 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
         val inputs = regionInputs(stereo, seconds, deriveFeatures)
 
         val vocalValues = if (features != null) vocalValues(stereo) else null
+        // Phase 1, L2: where open-unmix is not on this build, the cheap
+        // detector stands in over every window the pass decodes — the head
+        // pass included, whose window is exactly the edge the incoming side
+        // of a transition is read for. It is one STFT and a strided pass over
+        // the frame it already cost the decode for.
+        val cheapVocal = if (!VocalSpectrogram.available) {
+            CheapVocal.window(stereo.left, stereo.right, actualStart)?.first
+        } else {
+            null
+        }
         return Region(
             grid = inputs.forModel?.let { tracker.track(it, offsetSeconds = actualStart) },
             vocalMask = if (features != null && vocalValues != null) vocalMask(vocalValues, features, actualStart) else null,
@@ -1372,6 +1407,7 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
             features = inputs.derived,
             start = actualStart,
             vocalWindow = vocalValues?.let { CurveWindow(actualStart, VocalSpectrogram.frameRate, it) },
+            cheapVocalWindow = cheapVocal,
             levelWindow = if (features != null) levelCurve(stereo, actualStart) else null,
         )
     }
@@ -1498,6 +1534,26 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
             }
         }
         return merged.toList()
+    }
+
+    /**
+     * The mask fallback chain's middle rung: the cheap detector's windows
+     * resampled onto the energy curve's sample times, [NEUTRAL_VOCAL] beyond
+     * their coverage for the same reason [vocalMask] fills with it — unmeasured
+     * material sits below the policy's vocal threshold and can never trip
+     * vocal logic in either direction. Null when no window ran, which sends
+     * the caller to the DSP heuristic.
+     */
+    private fun cheapVocalMask(curve: List<EnergySample>, windows: List<CurveWindow>): List<Double>? {
+        if (curve.isEmpty() || windows.isEmpty()) return null
+        val mask = DoubleArray(curve.size) { NEUTRAL_VOCAL }
+        for (index in curve.indices) {
+            val time = curve[index].time
+            val window = windows.firstOrNull { time >= it.startTime && time < it.endTime } ?: continue
+            val frame = ((time - window.startTime) * window.frameRate).toInt()
+            if (frame in window.values.indices) mask[index] = window.values[frame].toDouble()
+        }
+        return mask.toList()
     }
 
     /** Recorded ready-but-empty so a track that cannot be decoded is not retried every tick. */

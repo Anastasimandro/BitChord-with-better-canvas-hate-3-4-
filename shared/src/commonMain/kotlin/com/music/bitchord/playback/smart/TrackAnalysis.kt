@@ -110,6 +110,16 @@ data class TrackAnalysis(
      */
     val vocalWindows: List<CurveWindow> = emptyList(),
     /**
+     * The cheap vocal detector's curves over the same edges, present only
+     * where open-unmix could not run (and on a head-only provisional, which
+     * publishes its edge half alone). Same [CurveWindow] shape and the same
+     * model scale as [vocalWindows] — [CheapVocal] rescales onto it — so a
+     * reader consumes either source without asking which filled it. Kept
+     * apart from [vocalWindows] so the loop mix's own checks stay keyed to
+     * the model's; the component versioning reads both.
+     */
+    val cheapVocalWindows: List<CurveWindow> = emptyList(),
+    /**
      * RMS level over the same windows, at [LEVEL_FRAME_RATE]: fine enough to
      * judge one bar's loudness, which the 240-point [energyCurve] is not.
      */

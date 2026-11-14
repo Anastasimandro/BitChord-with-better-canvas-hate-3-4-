@@ -44,6 +44,16 @@ import kotlin.math.min
  * may stretch or phase-align against it. Catalog tempo lookups merge in with
  * `beatConfidence` 0, so a metadata BPM alone can never authorize
  * beat-matching.
+ *
+ * Not the web player's `MIN_GRID_CONFIDENCE` (0.2) despite the similar job:
+ * that gate reads a *coverage* score — the share of a window's beats the grid
+ * explained — while this one reads Beat This!'s own per-beat confidence, a
+ * different measure on a different scale. The web window needs 0.2 of
+ * coverage to be trusted; a grid that explained a fifth of its window would
+ * never clear 0.55 of confidence here. The two numbers are both "the floor a
+ * grid must clear", not the same number wearing two hats — neither is the
+ * other's value, and porting one across platforms would silently strand
+ * every pair one rung down the ladder.
  */
 const val MIN_BEATMATCH_CONFIDENCE = 0.55
 

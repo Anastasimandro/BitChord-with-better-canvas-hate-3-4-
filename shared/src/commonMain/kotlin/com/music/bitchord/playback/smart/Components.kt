@@ -8,9 +8,9 @@
  * - grid:  headBeats/tailBeats, bpm/beatInterval/firstBeat/beatConfidence,
  *          downbeats, phraseBoundaries — Beat This! over the two edge windows.
  *          Filled at L0.
- * - vocal: vocalWindows/vocalActivityMask/vocalProbability — the vocal curves
- *          over the edges, from the cheap detector (L2) or open-unmix (L3).
- *          Stamped by whichever filled it.
+ * - vocal: vocalWindows/cheapVocalWindows/vocalActivityMask/vocalProbability
+ *          — the vocal curves over the edges, from the cheap detector (L2)
+ *          or open-unmix (L3). Stamped by whichever filled it.
  * - misc:  energyCurve/lowEnergyCurve/levelWindows, the intro/outro/content
  *          times, the mix candidates, the LUFS fields, key. L0 fills the edge
  *          half (edge loudness, edge structure, content end, the windows'
@@ -50,11 +50,15 @@ object Components {
         val hasHead = (a.headBeats?.beats?.size ?: 0) >= 2 || (a.bpm > 0 && a.beatConfidence > 0)
         val hasTail = (a.tailBeats?.beats?.size ?: 0) >= 2
         if (hasHead && hasTail) held += "grid"
-        // An empty vocalWindows list is what a record where the model couldn't
-        // run stores — a completed measurement of "none", not a missing one,
-        // and it holds. The phone never shipped a different vocal meaning, so
-        // unlike the web there is no since-version gate here.
-        if (a.vocalWindows.isNotEmpty()) held += "vocal"
+        // The vocal component holds from either source. Model windows — a
+        // monolithic record's whole-track curves, or open-unmix's edge ones at
+        // L3 — hold by construction: the phone never shipped a different vocal
+        // meaning, so unlike the web there is no since-version gate here. The
+        // cheap detector (L2) has to earn it: its windows are only asked for
+        // over the two edges a transition reads, so it holds when they cover
+        // BOTH, the same bar the grid component sets. One edge alone is a
+        // legitimate mid-ladder state, and must not read as done.
+        if (a.vocalWindows.isNotEmpty() || cheapCoversBothEdges(a)) held += "vocal"
         val hasLoudness = a.lufs != null || a.lufsHead != null || a.lufsTail != null
         val hasStructure = a.energyCurve.isNotEmpty() || a.levelWindows.isNotEmpty()
         // The misc stamp means "whole": a monolithic record holds all of it, a
@@ -102,6 +106,35 @@ object Components {
 
     /** Whether [a]'s tail edge (the mix-out side) still owes an L0 measurement. */
     fun needsTailEdge(a: TrackAnalysis): Boolean = a.gridVersion < GRID_VERSION
+
+    /**
+     * Whether [a]'s cheap vocal windows cover both mixable edges. The edges
+     * are what a transition reads: a head window sitting on the track's
+     * opening and a tail window reaching into its last mixable stretch. A
+     * decode that came back short is evidence of where the cache stopped, not
+     * of where the music does, so a window is only counted when it holds a
+     * real measurement — [MIN_CHEAP_EDGE_SECONDS] of curve — and sits close
+     * enough to its edge to describe it: [HEAD_EDGE_SLACK] into the opening,
+     * [TAIL_EDGE_SLACK] short of the end.
+     */
+    private fun cheapCoversBothEdges(a: TrackAnalysis): Boolean {
+        if (a.cheapVocalWindows.isEmpty() || a.duration <= 0.0) return false
+        val measured = a.cheapVocalWindows.filter {
+            it.endTime - it.startTime >= MIN_CHEAP_EDGE_SECONDS
+        }
+        val hasHead = measured.any { it.startTime <= HEAD_EDGE_SLACK }
+        val hasTail = measured.any { it.endTime >= a.duration - TAIL_EDGE_SLACK }
+        return hasHead && hasTail
+    }
+
+    /** A cheap window shorter than this is a decode sliver, not an edge measurement. */
+    private const val MIN_CHEAP_EDGE_SECONDS = 10.0
+
+    /** How far from second zero a cheap window may still count as the head edge. */
+    private const val HEAD_EDGE_SLACK = 5.0
+
+    /** How close to the end a cheap window must reach to count as the tail edge. */
+    private const val TAIL_EDGE_SLACK = 15.0
 
     /** What L2 still owes [a]: a vocal curve over its edges, from any source. */
     fun needsLevel2(a: TrackAnalysis): Boolean = a.vocalVersion < VOCAL_VERSION

@@ -398,6 +398,39 @@ class CrossfadeController(
     /** The last reason logged for the seek bar's Automix marker showing or not, so it logs on change. */
     private var lastMarkerVerdict = ""
 
+    /** The pair whose plan timing [plannedRemainingSec] describes, so a queue advance restarts the clock. */
+    private var plannedPair: String? = null
+
+    /**
+     * Phase 1: seconds between the moment the current pair's plan first stood
+     * complete and the transition's own start. Captured on the first tick the
+     * plan was usable — the loop plan or the blend, whichever took the pair —
+     * and read once, at arm time, by [recordMixEvent]. This is the "planned by
+     * t-60" measure: a plan assembled only in the arm's own lead time lands
+     * here as a couple of seconds, which is exactly what the mix report
+     * counts against the ladder.
+     */
+    private var plannedRemainingSec: Double? = null
+
+    /**
+     * Stamps [plannedRemainingSec] for [pair] if this is the first tick its
+     * plan stood complete. Later ticks refine nothing: the plan's age is when
+     * it first existed, not a running average.
+     */
+    private fun notePlanned(pair: String, remainingMs: Long) {
+        if (pair != plannedPair) {
+            plannedPair = pair
+            plannedRemainingSec = null
+        }
+        if (plannedRemainingSec == null) {
+            plannedRemainingSec = remainingMs.coerceAtLeast(0L) / 1000.0
+        }
+    }
+
+    /** The stamp for [pair]'s plan, or null when the pair never had one standing before the arm. */
+    private fun plannedRemainingSecFor(pair: String): Double? =
+        plannedRemainingSec?.takeIf { plannedPair == pair }
+
     /** Decoding the mix popup's waveforms for the blend in flight. */
     private var mixViewJob: Job? = null
 
@@ -1148,6 +1181,7 @@ class CrossfadeController(
                 end = 1f,
             )
             if (markerOnly) return
+            notePlanned(currentItem.mediaId, loopStartMs - player.currentPosition)
             plannedTransition = currentItem.mediaId to loopStartMs
             holdAhead(player, duration)
             if (loopStartMs - player.currentPosition > LOOP_ARM_LEAD_MS) return
@@ -1205,6 +1239,9 @@ class CrossfadeController(
                 "marker ${currentItem.mediaId} \"${currentItem.mediaMetadata.title}\" -> " +
                     "${nextItem.mediaId} \"${nextItem.mediaMetadata.title}\": $markerVerdict",
             )
+        }
+        if (markable) {
+            notePlanned(currentItem.mediaId, (plan.transitionStart * 1000).roundToLong() - player.currentPosition)
         }
         AppSettings.smartTransitionWindow.value = if (markable) {
             TransitionWindow(
@@ -1477,7 +1514,11 @@ class CrossfadeController(
             val outItem = items.getOrNull(outgoingItemIndex)
             val inItem = items.getOrNull(nextIndex)
             if (outItem != null && inItem != null) {
-                telemetryEvent = recordMixEvent(plan, outItem, inItem)
+                telemetryEvent = recordMixEvent(
+                    plan, outItem, inItem,
+                    // The stamp taken when this pair's plan first stood complete.
+                    plannedRemainingSecFor(outItem.mediaId),
+                )
             }
         }
 
@@ -1690,6 +1731,7 @@ class CrossfadeController(
         plan: TransitionPlan?,
         outItem: MediaItem,
         inItem: MediaItem,
+        plannedRemainingSec: Double? = null,
     ): MixTelemetry.TransitionEvent {
         val outAnalysis = analysisFor(outItem)
         val inAnalysis = analysisFor(inItem)
@@ -1739,6 +1781,7 @@ class CrossfadeController(
             ),
             bothGridsReady = outAnalysis.isUsable && inAnalysis.isUsable &&
                 outAnalysis.tailBeats != null && inAnalysis.headBeats != null,
+            plannedRemainingSec = plannedRemainingSec,
         )
         MixTelemetry.record(event)
         TrackLog.i(
@@ -2663,8 +2706,9 @@ class CrossfadeController(
                 .takeIf { it.isFinite() && it > 0f } ?: 1f
         }
         // The loop is armed before anything can stop it: record the event
-        // now, and let [finishLoop]/[loopBail] close it.
-        telemetryEvent = recordMixEvent(null, outItem, inItem)
+        // now, and let [finishLoop]/[loopBail] close it. Its plan's age is
+        // the stamp the loop path noted when the loop first took the pair.
+        telemetryEvent = recordMixEvent(null, outItem, inItem, plannedRemainingSecFor(outItem.mediaId))
         Log.d(
             TAG,
             "loop build ${outItem.mediaId}->${inItem.mediaId} at ${sampleRate}Hz, loop at " +
