@@ -628,8 +628,9 @@ export function scheduleGapMix(req: TransitionRequest): TransitionPlan {
   const ctx = from.ctx;
   const now = ctx.currentTime;
   const earliest = now + Math.max(from.scheduleAhead, to.scheduleAhead) + 0.1;
+  const fromGrid = gridOf(fromAnalysis);
   const toGrid = gridOf(toAnalysis);
-  if (gridOf(fromAnalysis) === null || toGrid === null) return scheduleFallback(req, earliest, 'gap needs both grids');
+  if (fromGrid === null || toGrid === null) return scheduleFallback(req, earliest, 'gap needs both grids');
 
   // the silence point: where the outgoing track's audible content ends
   const silenceAt = fromAnalysis.contentEndSec ?? fromAnalysis.outroStartSec ?? fromAnalysis.durationSec;
