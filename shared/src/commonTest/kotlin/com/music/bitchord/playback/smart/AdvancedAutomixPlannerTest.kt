@@ -2,6 +2,7 @@ package com.music.bitchord.playback.smart
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -207,5 +208,48 @@ class AdvancedAutomixPlannerTest {
         val bars = plan.fadeSeconds / (4 * plan.beatSeconds)
         assertEquals(bars.toInt().toDouble(), bars, 1e-6, "overlap of $bars bars")
         assertTrue(!plan.phaseLock, "phase correction must not pulse AudioTrack speed while audible")
+    }
+
+    /**
+     * An L0-only record: grids at both edges and nothing else — no curve, no
+     * key, no vocal evidence, vocal and misc versions still at 0. What a
+     * track that just finished its head-and-tail decode carries, and what the
+     * cold-start race guarantees by t-60.
+     */
+    private fun l0Only(id: String, bpm: Double): TrackAnalysis {
+        val beat = 60.0 / bpm
+        val beats = generateSequence(0.5) { it + beat }.takeWhile { it < 199.0 }.toList()
+        val downbeats = generateSequence(0.5) { it + 4 * beat }.takeWhile { it < 199.0 }.toList()
+        return TrackAnalysis(
+            status = TrackAnalysis.STATUS_READY,
+            trackId = id,
+            duration = 200.0,
+            bpm = bpm,
+            beatInterval = beat,
+            beatConfidence = 0.9,
+            headBeats = BeatSide(beats.filter { it <= 30.0 }, downbeats.filter { it <= 30.0 }, bpm, 0.9),
+            tailBeats = BeatSide(beats.filter { it >= 170.0 }, downbeats.filter { it >= 170.0 }, bpm, 0.9),
+            downbeats = downbeats,
+            firstBeat = 0.5,
+        )
+    }
+
+    @Test
+    fun anL0OnlyPairStillPlans() {
+        // The race's bottom line: a pair measured only at L0 — both grids,
+        // nothing deeper — plans a real transition rather than waiting on L3.
+        val plan = plan(l0Only("a", 120.0), l0Only("b", 120.0), advanced = true)
+        assertFalse(plan.blocked, "an L0-only pair must not sit blocked: ${plan.reason}")
+        assertEquals(TransitionStyle.DJ_BLEND, plan.transitionStyle)
+
+        // And a pair L0 cannot beatmatch still gets a valid plan — the
+        // fallback gesture, not a refusal.
+        val mismatch = plan(l0Only("c", 120.0), l0Only("d", 94.0), advanced = true)
+        assertFalse(mismatch.blocked, "a tempo-mismatched L0 pair must still plan: ${mismatch.reason}")
+        assertTrue(
+            mismatch.transitionStyle in listOf(TransitionStyle.DJ_FILTER, TransitionStyle.EQUAL_POWER),
+            "got ${mismatch.transitionStyle}",
+        )
+        assertTrue(mismatch.fadeSeconds > 0.0)
     }
 }
