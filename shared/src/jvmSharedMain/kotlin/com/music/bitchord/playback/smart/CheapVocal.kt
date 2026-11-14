@@ -359,7 +359,7 @@ object CheapVocal {
         if (raw.isEmpty()) return 0.0
         var n = 0
         for (v in raw) {
-            if (v.toDouble() >= CHEAP_UNCERTAIN_BAND.first && v.toDouble() <= CHEAP_UNCERTAIN_BAND.endInclusive) n++
+            if (v.toDouble() >= CHEAP_UNCERTAIN_BAND.start && v.toDouble() <= CHEAP_UNCERTAIN_BAND.endInclusive) n++
         }
         return n.toDouble() / raw.size
     }

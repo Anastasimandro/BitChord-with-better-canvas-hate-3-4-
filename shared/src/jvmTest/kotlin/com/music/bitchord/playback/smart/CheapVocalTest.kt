@@ -117,14 +117,14 @@ class CheapVocalTest {
     @Test
     fun theDoubtBandCoversTheModelScalePointOneFiveToPointThreeFive() {
         // The band edges, mapped through the rescale, read 0.15 and 0.35.
-        assertEquals(0.15, CheapVocal.onModelScale(CheapVocal.CHEAP_UNCERTAIN_BAND.first), 1e-10)
+        assertEquals(0.15, CheapVocal.onModelScale(CheapVocal.CHEAP_UNCERTAIN_BAND.start), 1e-10)
         assertEquals(0.35, CheapVocal.onModelScale(CheapVocal.CHEAP_UNCERTAIN_BAND.endInclusive), 1e-2)
     }
 
     @Test
     fun uncertainShareCountsOnlyTheDoubtBand() {
-        val low = CheapVocal.CHEAP_UNCERTAIN_BAND.first - 0.01
-        val inside = (CheapVocal.CHEAP_UNCERTAIN_BAND.first + CheapVocal.CHEAP_UNCERTAIN_BAND.endInclusive) / 2
+        val low = CheapVocal.CHEAP_UNCERTAIN_BAND.start - 0.01
+        val inside = (CheapVocal.CHEAP_UNCERTAIN_BAND.start + CheapVocal.CHEAP_UNCERTAIN_BAND.endInclusive) / 2
         val high = CheapVocal.CHEAP_UNCERTAIN_BAND.endInclusive + 0.01
         val raw = floatArrayOf(low.toFloat(), inside.toFloat(), high.toFloat(), inside.toFloat())
         assertEquals(0.5, CheapVocal.uncertainShare(raw), 1e-12)
