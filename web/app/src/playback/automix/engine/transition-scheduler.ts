@@ -4,7 +4,18 @@
 import type { TrackAnalysis } from '../analysis/types';
 import type { Deck } from './deck';
 import { gridOf, phraseAtOrBefore, phraseAtOrAfter, downbeatAtOrAfter, BEATS_PER_BAR } from './grid';
-import { mixOutAnchor, VOCAL_ACTIVE, VOCAL_OVERLAP_BLEND_GATE, plannedVocalOverlap, tailView, headView, percentile, incomingGainCompensation, MAX_LUFS_COMPENSATION_DB, type CurveView } from './policy';
+import {
+  mixOutAnchor,
+  VOCAL_ACTIVE,
+  VOCAL_OVERLAP_BLEND_GATE,
+  plannedVocalOverlap,
+  tailView,
+  headView,
+  percentile,
+  incomingGainCompensation,
+  MAX_LUFS_COMPENSATION_DB,
+} from './policy';
+import type { CurveView } from './policy';
 import type { MixStyle } from '../telemetry';
 import { chooseBassSwapBeat, shouldSuppressBassSwap } from './bass-swap';
 import type { BassSwapCurves, BassSwapParams } from './bass-swap';
