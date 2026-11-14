@@ -55,78 +55,10 @@ const KILL_DB = -12;
 const SHORT_BLEND_KILL_DB = -6;
 const FULL_SWAP_MIN_BARS = 8;
 
-/** Phase 2 Task 5: hard ceiling on how far the entry may advance from the first audible downbeat. */
+/** Phase 2 Task 5: hard ceiling on how far the entry may advance from the first downbeat. */
 export const INCOMING_MAX_ADVANCE_BARS = 8;
 /** Phase 2 Task 5: max fraction of track duration the entry may skip (mirrors Android). */
 export const MAX_INCOMING_SKIP_FRACTION = 0.25;
-
-/** Vocal activity threshold — same scale as the phone's 0.25. */
-const VOCAL_ACTIVE = 0.25;
-/** Gate above which a long blend is capped/faded: simultaneous vocal >15% of overlap window. */
-const VOCAL_OVERLAP_BLEND_GATE = 0.15;
-/** Maximum LUFS gain compensation in dB, applied as a static base gain on the incoming deck. */
-const MAX_LUFS_COMPENSATION_DB = 6;
-
-/** A curve read as a gesture reads it: samples, their frame size, and the track time sample 0 sits at. */
-interface CurveView {
-  curve: number[];
-  windowSec: number;
-  startSec: number;
-  endSec: number;
-}
-
-/** The [p] quantile of [values], as loopMix reads its loudness stretch (60th percentile). */
-function percentile(values: number[], p: number): number {
-  if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]!;
-}
-
-/** The first energy span, when it covers the track's opening. */
-function headView(a: TrackAnalysis, headSec: number): CurveView | null {
-  const span = a.energySpans?.find((s) => s.startSec <= 0.5);
-  if (!span || !span.curve.length) return null;
-  const end = span.startSec + span.curve.length * span.windowSec;
-  if (end < Math.min(headSec * 0.5, 2)) return null;
-  return { curve: span.curve, windowSec: span.windowSec, startSec: span.startSec, endSec: end };
-}
-
-/** Low-energy threshold for the head span: a frame is "low energy" if it's below 30% of the span's 60th percentile. */
-function lowEnergyThreshold(view: CurveView): number {
-  const typical = percentile(view.curve, 0.6);
-  return Math.max(0.04, typical * 0.3);
-}
-
-/** Checks if [timeSec] falls inside a contiguous low-energy region of at least [minSpanSec] seconds. */
-function isInLongLowEnergySpan(view: CurveView, timeSec: number, minSpanSec = 2): boolean {
-  const threshold = lowEnergyThreshold(view);
-  const idx = Math.floor((timeSec - view.startSec) / view.windowSec);
-  if (idx < 0 || idx >= view.curve.length) return false;
-  if (view.curve[idx]! > threshold) return false;
-  let left = idx;
-  while (left > 0 && view.curve[left - 1]! <= threshold) left--;
-  let right = idx;
-  while (right + 1 < view.curve.length && view.curve[right + 1]! <= threshold) right++;
-  const spanSec = (right - left + 1) * view.windowSec;
-  return spanSec >= minSpanSec;
-}
-
-/**
- * Finds the first "audible" downbeat: the first downbeat NOT inside a >2 s low-energy span.
- * Phase 2 Task 5: invert selection order — start here, then advance by score within hard caps.
- */
-function firstAudibleDownbeat(toAnalysis: TrackAnalysis, toGrid: NonNullable<ReturnType<typeof gridOf>>): number {
-  const headBeats = toAnalysis.headBeats?.downbeats;
-  const downbeats: number[] = headBeats ?? [toGrid.downbeatSec];
-  if (downbeats.length === 0) return toGrid.downbeatSec;
-  const view = headView(toAnalysis, toGrid.barSec * 16);
-  if (!view) return downbeats[0];
-  for (const db of downbeats) {
-    if (db < 0 || db >= toAnalysis.durationSec) continue;
-    if (!isInLongLowEnergySpan(view, db, 2)) return db;
-  }
-  return downbeats[0];
-}
 
 /**
  * Confidence-scaled blend length: the UI's bar count is a MAX, not a command.
@@ -221,16 +153,15 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
   }
 
   // --- incoming mix-in point (track time) ---
-  // Phase 2 Task 5: invert selection order — start at first AUDIBLE downbeat,
-  // advance only by score within hard caps (8 bars, 25% duration). Delete the
-  // global search for fullEnergyPhrase; structure is not negotiable.
-  const firstDownbeat = firstAudibleDownbeat(toAnalysis, toGrid);
+  // Phase 2 Task 5: start at first downbeat, apply hard caps (8 bars, 25% duration).
+  // No global search for fullEnergyPhrase; structure is not negotiable.
+  const firstDownbeat = toGrid.downbeatSec;
   const barSec = toGrid.barSec;
   const capByBars = firstDownbeat + INCOMING_MAX_ADVANCE_BARS * barSec;
   const capByFraction = firstDownbeat + (MAX_INCOMING_SKIP_FRACTION * toAnalysis.durationSec);
   const hardCap = Math.min(capByBars, capByFraction, toAnalysis.durationSec - barSec);
 
-  // Base entry is the first audible downbeat. No free search for a "better drop".
+  // Base entry is the first downbeat. No free search for fullEnergyPhrase.
   let mixInTrackTime = firstDownbeat;
 
   // Align to a downbeat at or after the base, not exceeding hardCap.
@@ -353,10 +284,10 @@ function scheduleFilterMix(
     blendInputSec = durationSec * outRate;
   }
 
-  // Phase 2 Task 5: filter mix also uses first audible downbeat with hard caps.
+  // Phase 2 Task 5: filter mix also uses first downbeat with hard caps.
   let mixInTrackTime: number;
   if (toGrid) {
-    const firstDownbeat = firstAudibleDownbeat(toAnalysis, toGrid);
+    const firstDownbeat = toGrid.downbeatSec;
     const barSec = toGrid.barSec;
     const capByBars = firstDownbeat + INCOMING_MAX_ADVANCE_BARS * barSec;
     const capByFraction = firstDownbeat + (MAX_INCOMING_SKIP_FRACTION * toAnalysis.durationSec);
@@ -429,9 +360,9 @@ export function scheduleGapMix(req: TransitionRequest): TransitionPlan {
   const t0 = from.timeline.ctxTimeAt(mixOutTrackTime, now);
   if (t0 === null || t0 < earliest) return scheduleFallback(req, earliest, 'the silence point is already gone');
 
-  // Phase 2 Task 5: the incoming track enters at its first AUDIBLE downbeat
-  // (not in >2s low-energy span) — never a best-drop search.
-  const mixInTrackTime = firstAudibleDownbeat(toAnalysis, toGrid);
+  // Phase 2 Task 5: the incoming track enters at its first downbeat
+  // (using grid's downbeat as the audible downbeat approximation) — never a best-drop search.
+  const mixInTrackTime = toGrid.downbeatSec;
   to.playAt({ ctxTime: t0, trackTime: mixInTrackTime, rate: 1 });
   from.pauseAt(t0 + GAP_FADE_SEC + 0.05);
   applyEqualPowerCross(from.gain.gain, to.gain.gain, t0, GAP_FADE_SEC);
