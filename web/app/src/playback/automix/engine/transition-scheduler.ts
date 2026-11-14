@@ -58,9 +58,9 @@ const SHORT_BLEND_KILL_DB = -6;
 const FULL_SWAP_MIN_BARS = 8;
 
 /** Phase 2 Task 5: hard ceiling on how far the entry may advance from the first audible downbeat. */
-const INCOMING_MAX_ADVANCE_BARS = 8;
+export const INCOMING_MAX_ADVANCE_BARS = 8;
 /** Phase 2 Task 5: max fraction of track duration the entry may skip (mirrors Android). */
-const MAX_INCOMING_SKIP_FRACTION = 0.25;
+export const MAX_INCOMING_SKIP_FRACTION = 0.25;
 
 /**
  * Low-energy threshold for the head span: a frame is "low energy" if it's below
