@@ -102,7 +102,7 @@ function isInLongLowEnergySpan(view: CurveView, timeSec: number, minSpanSec = 2)
  */
 function firstAudibleDownbeat(toAnalysis: TrackAnalysis, toGrid: NonNullable<ReturnType<typeof gridOf>>): number {
   const headBeats = toAnalysis.headBeats?.downbeats;
-  const downbeats = headBeats ?? [toGrid.downbeatSec];
+  const downbeats: number[] = headBeats ?? [toGrid.downbeatSec];
   if (downbeats.length === 0) return toGrid.downbeatSec;
 
   // Get the energy view for the head region (where the mix-in point lives)
