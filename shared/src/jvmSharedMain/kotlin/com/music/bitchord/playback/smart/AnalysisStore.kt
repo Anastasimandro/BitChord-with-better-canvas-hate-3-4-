@@ -206,39 +206,49 @@ class AnalysisStore(
         val lufs: Double? = null,
         val lufsHead: Double? = null,
         val lufsTail: Double? = null,
+        val analysisVersion: Int = 0,
+        val gridVersion: Int = 0,
+        val vocalVersion: Int = 0,
+        val miscVersion: Int = 0,
     ) {
-        fun toAnalysis(trackId: String) = TrackAnalysis(
-            status = TrackAnalysis.STATUS_READY,
-            trackId = trackId,
-            duration = duration,
-            bpm = bpm,
-            beatInterval = beatInterval,
-            beatConfidence = beatConfidence,
-            firstBeat = firstBeat,
-            downbeats = downbeats,
-            phraseBoundaries = phraseBoundaries,
-            key = key,
-            keyConfidence = keyConfidence,
-            audibleStartTime = audibleStartTime,
-            pickupTime = pickupTime,
-            introEndTime = introEndTime,
-            outroStartTime = outroStartTime,
-            contentEndTime = contentEndTime,
-            mixInTime = mixInTime,
-            mixOutTime = mixOutTime,
-            mixInCandidates = mixInCandidates.map { it.toCue() },
-            mixOutCandidates = mixOutCandidates.map { it.toCue() },
-            energyCurve = energyCurve.map { it.toSample() },
-            lowEnergyCurve = lowEnergyCurve.map { it.toSample() },
-            vocalActivityMask = vocalActivityMask,
-            vocalProbability = vocalProbability,
-            headBeats = headBeats?.toSide(),
-            tailBeats = tailBeats?.toSide(),
-            vocalWindows = vocalWindows.map { it.toWindow() },
-            levelWindows = levelWindows.map { it.toWindow() },
-            lufs = lufs,
-            lufsHead = lufsHead,
-            lufsTail = lufsTail,
+        fun toAnalysis(trackId: String) = Components.adopt(
+            TrackAnalysis(
+                status = TrackAnalysis.STATUS_READY,
+                trackId = trackId,
+                duration = duration,
+                bpm = bpm,
+                beatInterval = beatInterval,
+                beatConfidence = beatConfidence,
+                firstBeat = firstBeat,
+                downbeats = downbeats,
+                phraseBoundaries = phraseBoundaries,
+                key = key,
+                keyConfidence = keyConfidence,
+                audibleStartTime = audibleStartTime,
+                pickupTime = pickupTime,
+                introEndTime = introEndTime,
+                outroStartTime = outroStartTime,
+                contentEndTime = contentEndTime,
+                mixInTime = mixInTime,
+                mixOutTime = mixOutTime,
+                mixInCandidates = mixInCandidates.map { it.toCue() },
+                mixOutCandidates = mixOutCandidates.map { it.toCue() },
+                energyCurve = energyCurve.map { it.toSample() },
+                lowEnergyCurve = lowEnergyCurve.map { it.toSample() },
+                vocalActivityMask = vocalActivityMask,
+                vocalProbability = vocalProbability,
+                headBeats = headBeats?.toSide(),
+                tailBeats = tailBeats?.toSide(),
+                vocalWindows = vocalWindows.map { it.toWindow() },
+                levelWindows = levelWindows.map { it.toWindow() },
+                lufs = lufs,
+                lufsHead = lufsHead,
+                lufsTail = lufsTail,
+                analysisVersion = analysisVersion,
+                gridVersion = gridVersion,
+                vocalVersion = vocalVersion,
+                miscVersion = miscVersion,
+            ),
         )
 
         companion object {
@@ -272,6 +282,10 @@ class AnalysisStore(
                 lufs = analysis.lufs,
                 lufsHead = analysis.lufsHead,
                 lufsTail = analysis.lufsTail,
+                analysisVersion = analysis.analysisVersion,
+                gridVersion = analysis.gridVersion,
+                vocalVersion = analysis.vocalVersion,
+                miscVersion = analysis.miscVersion,
             )
         }
     }
@@ -339,6 +353,12 @@ class AnalysisStore(
          * Entries from an older schema are ignored rather than migrated: a
          * re-analysis costs seconds, and a beat grid interpreted under the wrong
          * assumptions is silently wrong for the life of the file.
+         *
+         * Phase 1 did NOT bump this: the per-component versions are additive
+         * fields with defaults, and [Components.adopt] migrates a monolithic
+         * record on load by stamping what it genuinely holds. Discarding every
+         * cached analysis to introduce a version counter would defeat the
+         * counter's own point.
          */
         const val SCHEMA_VERSION = 4
 

@@ -125,6 +125,22 @@ data class TrackAnalysis(
     val lufs: Double? = null,
     val lufsHead: Double? = null,
     val lufsTail: Double? = null,
+
+    /**
+     * BitChord, Automix 2.0 Phase 1: per-component cache versions.
+     *
+     * The old cache key was one monolithic era: a vocal improvement threw away
+     * every grid, a grid fix re-ran the vocal model. The ladder made that
+     * expensive — an L0 recompute sits on the critical path of the transition —
+     * so validity moved onto the record itself, one version per component,
+     * stamped by whichever rung filled it. A bump costs only its own fields.
+     * Zero means "this component has not been (re)measured under its current
+     * meaning", which every reader already treats as no evidence.
+     */
+    val analysisVersion: Int = 0,
+    val gridVersion: Int = 0,
+    val vocalVersion: Int = 0,
+    val miscVersion: Int = 0,
 ) {
     /**
      * Whether this analysis actually describes a track, as opposed to standing
@@ -141,6 +157,14 @@ data class TrackAnalysis(
 
     companion object {
         const val STATUS_READY = "ready"
+
+        /**
+         * The record shape this build computes, shared with the web player's
+         * ladder (9 is the Phase 0 loudness shape everywhere). A component's
+         * own version decides what is valid; this is what a freshly stamped
+         * record carries.
+         */
+        const val ANALYSIS_VERSION = 9
     }
 }
 
