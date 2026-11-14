@@ -7,7 +7,7 @@
 // Local only: a localStorage ring of ~500 events, read back by the mix
 // report (shell/NerdStats.tsx). Nothing leaves the device.
 
-export type MixStyle = 'loop' | 'blend' | 'filter' | 'crossfade' | 'gap';
+export type MixStyle = 'loop' | 'blend' | 'filter' | 'crossfade' | 'gap' | 'fade';
 
 export interface RejectedStyle {
   style: MixStyle;

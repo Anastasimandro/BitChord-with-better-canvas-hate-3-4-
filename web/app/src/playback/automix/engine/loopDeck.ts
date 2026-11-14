@@ -7,6 +7,7 @@
 // ratio, which an <audio> element can't.
 import SignalsmithStretch, { type SignalsmithStretchNode } from 'signalsmith-stretch';
 import { ThreeBandEQ } from './eq';
+import { Scheduler, createLoopDeckDispatcher } from './scheduler';
 
 /** One scheduled change, in the track's own seconds (not the region's). */
 export interface LoopChange {
@@ -25,7 +26,6 @@ export interface LoopChange {
  * 180 BPM; this is comfortably under that.
  */
 const POST_AHEAD_SEC = 0.25;
-const DISPATCH_MS = 20;
 
 export class LoopDeck {
   readonly eq: ThreeBandEQ;
@@ -37,7 +37,7 @@ export class LoopDeck {
   loadedKey: string | null = null;
   latencySec = 0.12;
   private pending: LoopChange[] = [];
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private dispatcherCleanup: (() => void) | null = null;
 
   private constructor(
     readonly ctx: AudioContext,
@@ -79,39 +79,32 @@ export class LoopDeck {
     this.loadedKey = key;
   }
 
-  /** Queues changes (sorted by output); each is posted just before it's due. */
+  /** Queues changes (sorted by output); dispatched by scheduler 'at-beat' messages. */
   schedule(changes: LoopChange[]): void {
     this.pending.push(...changes);
     this.pending.sort((a, b) => a.output - b.output);
-    this.timer ??= setInterval(() => this.dispatch(), DISPATCH_MS);
-    this.dispatch();
   }
 
-  private dispatch() {
-    const now = this.ctx.currentTime;
-    while (this.pending.length && this.pending[0]!.output - now < POST_AHEAD_SEC) {
-      const c = this.pending.shift()!;
-      const r = this.regionStart;
-      this.stretch.schedule({
-        output: c.output,
-        input: c.input - r,
-        rate: c.rate,
-        active: c.active,
-        loopStart: c.loop ? c.loop[0] - r : 0,
-        loopEnd: c.loop ? c.loop[1] - r : 0,
-      });
-    }
-    if (!this.pending.length && this.timer !== null) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
+  /** Attaches this deck to a scheduler for beat-accurate dispatch. */
+  attachScheduler(scheduler: Scheduler): void {
+    this.detachScheduler();
+    this.dispatcherCleanup = createLoopDeckDispatcher(
+      { pending: this.pending, ctx: this.ctx, stretch: this.stretch, regionStart: this.regionStart },
+      scheduler,
+      POST_AHEAD_SEC,
+    );
+  }
+
+  /** Detaches from the scheduler (falls back to no-op; call before dispose). */
+  detachScheduler(): void {
+    this.dispatcherCleanup?.();
+    this.dispatcherCleanup = null;
   }
 
   /** Stops now and forgets everything queued; filters, EQ and gain back to rest. */
   stop(): void {
     this.pending = [];
-    if (this.timer !== null) clearInterval(this.timer);
-    this.timer = null;
+    this.detachScheduler();
     this.stretch.schedule({ active: false });
     const now = this.ctx.currentTime;
     this.gain.gain.cancelScheduledValues(now);

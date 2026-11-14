@@ -13,10 +13,11 @@ import { analyzer } from '../analysis/analyzer';
 import { recordTransition, markHandoff, type RejectedStyle, type TransitionEvent } from '../telemetry';
 import type { Deck } from './deck';
 import type { Candidate } from './selector';
-import { scheduleTransition, scheduleGapMix, plannedBars, MIN_GRID_CONFIDENCE, type TransitionPlan } from './transition-scheduler';
+import { scheduleTransition, scheduleGapMix, plannedBars, MIN_GRID_CONFIDENCE, type TransitionPlan, scheduleWithStyleScorer } from './transition-scheduler';
 import { asOutgoing, gridOf, phraseAtOrBefore } from './grid';
-import { detectGap, incomingGainCompensation, mixLufsOf } from './policy';
+import { detectGap, incomingGainCompensation, mixLufsOf, plannedVocalOverlap, VOCAL_ACTIVE, computeEnergyContinuity, computeLowEnergyAtJoin } from './policy';
 import type { LoopDeck } from './loopDeck';
+import { Scheduler, createAutoDJHandoffHandler } from './scheduler';
 import {
   IN_REGION_SEC,
   mixBeatPhaseAt,
@@ -164,6 +165,9 @@ export class AutoDJ {
   private pendingEvent: TransitionEvent | null = null;
   /** BitChord, Phase 0: why no loop mix was prepared for the coming pair, for the event. */
   private loopRefusal: string | null = null;
+  /** AudioWorklet scheduler for real-time handoff/beat timing (falls back to timers). */
+  private scheduler: Scheduler | null = null;
+  private handoffCleanup: (() => void) | null = null;
 
   constructor(
     private host: AutomixHost,
@@ -233,7 +237,26 @@ export class AutoDJ {
   start(): void {
     if (this.state === 'idle') this.state = 'playing';
     this.timer ??= setInterval(() => void this.tick(), 1000);
+    // Initialize scheduler (async, non-blocking)
+    this.initScheduler();
     void this.tick();
+  }
+
+  private async initScheduler(): Promise<void> {
+    this.scheduler = new Scheduler(this.host.ctx);
+    const workletActive = await this.scheduler.init();
+    if (workletActive) {
+      console.log('[automix] scheduler worklet active');
+    } else {
+      console.log('[automix] scheduler falling back to timers');
+    }
+    // Set up handoff handler with getters to read current state
+    this.handoffCleanup = createAutoDJHandoffHandler(
+      () => this.blend,
+      () => this.host,
+      () => this.pendingEvent,
+      this.scheduler,
+    );
   }
 
   stop(): void {
@@ -241,6 +264,10 @@ export class AutoDJ {
       clearInterval(this.timer);
       this.timer = null;
     }
+    this.scheduler?.dispose();
+    this.scheduler = null;
+    this.handoffCleanup?.();
+    this.handoffCleanup = null;
     this.cancel();
     this.state = 'idle';
     this.push();
@@ -280,6 +307,12 @@ export class AutoDJ {
       this.loopTimes = null;
       this.blend = null;
       this.host.hold(false);
+    }
+    // Clear scheduler plan
+    this.scheduler?.setPlan(null);
+    // Detach loop deck schedulers
+    if (this.loopDecks) {
+      for (const d of this.loopDecks) d.detachScheduler();
     }
     this.loopPlan = null;
     this.loopPreparing = null;
@@ -394,13 +427,8 @@ export class AutoDJ {
       const now = this.host.ctx.currentTime;
 
       if (this.state === 'scheduled' && this.plan && this.blend) {
-        const handoffAt = this.loopTimes?.handoffAt ?? this.plan.t0 + this.plan.durationSec / 2;
-        if (!this.blend.handedOff && now >= handoffAt) {
-          this.blend.handedOff = true;
-          this.host.handoff();
-          // the skip window opens at the handoff (Phase 0)
-          if (this.pendingEvent) markHandoff(this.pendingEvent);
-        }
+        // Handoff detection moved to scheduler worklet (at-handoff message)
+        // The 1s tick keeps its other duties: preload, queueing, L-ladder
         if (now > this.plan.t0 + this.plan.durationSec + 0.3) this.completeTransition();
         this.push();
         return;
@@ -493,21 +521,17 @@ export class AutoDJ {
       // count how often the race was lost.
       if (ready && !this.plan && !this.loopPlan && remaining < PLAN_DEADLINE_SEC && this.loopPreparing === null) {
         const next = analyzer.get(queued.videoId)!;
-        if (this.bothAnalyzed && this.gapOffered(cur, next)) {
-          this.scheduleGap(cur, next);
-        } else {
-          this.scheduleBlend(cur, false);
-          if (this.pendingEvent && !this.bothAnalyzed) this.pendingEvent.deadlinePlanned = true;
-        }
+        this.scheduleWithScorer(cur, next, false);
+        if (this.pendingEvent && !this.bothAnalyzed) this.pendingEvent.deadlinePlanned = true;
       }
       if (ready && remaining < SCHEDULE_WINDOW_SEC && this.loopPlan) {
         await this.scheduleLoop(cur);
-      } else if (ready && remaining < SCHEDULE_WINDOW_SEC && this.gapOffered(cur, analyzer.get(queued.videoId)!)) {
-        this.scheduleGap(cur, analyzer.get(queued.videoId)!);
       } else if (ready && remaining < SCHEDULE_WINDOW_SEC) {
-        this.scheduleBlend(cur, false);
+        const next = analyzer.get(queued.videoId)!;
+        this.scheduleWithScorer(cur, next, false);
       } else if (ready && this.trackRemaining() < EMERGENCY_REMAINING_SEC) {
-        this.scheduleBlend(cur, true);
+        const next = analyzer.get(queued.videoId)!;
+        this.scheduleWithScorer(cur, next, true);
       }
       this.push();
     } finally {
@@ -640,6 +664,45 @@ export class AutoDJ {
     this.onTransition?.(cur, next, this.plan, this.transitionBars);
   }
 
+  /**
+   * Phase 2 Task 6: schedule a transition using the Style Scorer with hard gates.
+   * Replaces the ad-hoc scheduleBlend/scheduleGap logic with a single auditable decision.
+   */
+  private scheduleWithScorer(cur: TrackAnalysis, next: TrackAnalysis, forceNow: boolean): void {
+    const queued = this.host.next();
+    if (!this.nextKey || queued?.videoId !== this.nextKey) return;
+    const from = this.host.front();
+    const to = this.host.back();
+
+    // Prepare decks
+    to.lock(from);
+    to.setVolume(1);
+    to.eq.reset();
+
+    // Use the style scorer to pick the best style and schedule it
+    this.plan = scheduleWithStyleScorer(
+      { from, to, fromAnalysis: cur, toAnalysis: next, bars: this.transitionBars, forceNow },
+      this.loopPlan,
+    );
+
+    this.blend = { from, to, handedOff: false };
+    const outRate = from.timeline.rateAt(this.host.ctx.currentTime) || 1;
+    this.window = {
+      videoId: cur.fileKey,
+      startSec: this.plan.mixOutTrackTime,
+      endSec: this.plan.mixOutTrackTime + this.plan.durationSec * outRate,
+    };
+    if (!this.bothAnalyzed) this.window = null;
+    const grid = this.plan.style === 'crossfade' ? null : gridOf(cur);
+    this.beatSec = grid ? grid.beatSec / outRate : null;
+    this.state = 'scheduled';
+    // a plan built on stubs (the t-60 guarantee on missing L0) is marked for
+    // replacement when the real grids land
+    this.planDegraded = !this.bothAnalyzed;
+    this.pendingEvent = this.eventFor(cur, next, this.plan);
+    this.onTransition?.(cur, next, this.plan, this.transitionBars);
+  }
+
   /** BitChord, Phase 0: the event the mix loop records when this transition ends. */
   private eventFor(cur: TrackAnalysis, next: TrackAnalysis, plan: TransitionPlan): TransitionEvent {
     const outGrid = gridOf(asOutgoing(cur));
@@ -686,6 +749,19 @@ export class AutoDJ {
       const { out, in: inn } = this.loopPlan;
       return Math.max(out.vocal ?? 0, inn.vocal ?? 0);
     }
+    if (plan.style === 'blend') {
+      // Use the plannedVocalOverlap function for the simultaneous vocal fraction
+      const outRate = 1; // outgoing track is never retimed on web
+      return plannedVocalOverlap(
+        cur.vocals ?? [],
+        next.vocals ?? [],
+        plan.mixOutTrackTime,
+        plan.mixOutTrackTime + plan.durationSec * outRate,
+        plan.mixInTrackTime,
+        plan.rate,
+      );
+    }
+    // For filter/crossfade/gap: fall back to per-side share (max of the two)
     const outShare = sungShare(cur.vocals ?? [], plan.mixOutTrackTime, plan.mixOutTrackTime + plan.durationSec * (plan.rate || 1));
     const inShare = sungShare(next.vocals ?? [], plan.mixInTrackTime, plan.mixInTrackTime + plan.durationSec * plan.rate);
     const shares = [outShare, inShare].filter((s): s is number => s !== null);
@@ -694,6 +770,11 @@ export class AutoDJ {
 
   /** Which candidates lost and the gate that killed each, in the ladder's own words. */
   private rejectionsFor(plan: TransitionPlan): RejectedStyle[] {
+    // Use the scorer's rejected styles if available (Phase 2 Task 6)
+    if (plan.rejectedStylesAndWhy && plan.rejectedStylesAndWhy.length > 0) {
+      return plan.rejectedStylesAndWhy;
+    }
+    // Fallback for plans created before the scorer (e.g., loop mix)
     const loopLost = this.loopRefusal ? [{ style: 'loop' as const, reason: this.loopRefusal }] : [];
     switch (plan.style) {
       case 'loop':
@@ -864,6 +945,19 @@ export class AutoDJ {
     const times = scheduleLoopMix(plan, outDeck, inDeck, t0, comp);
     this.host.hold(true);
 
+    // Attach loop decks to scheduler for beat-accurate dispatch
+    if (this.scheduler) {
+      outDeck.attachScheduler(this.scheduler);
+      inDeck.attachScheduler(this.scheduler);
+      // Set scheduler plan: t0, handoffAt, releaseAt, beatSec for at-beat messages
+      this.scheduler.setPlan({
+        t0,
+        handoffAt: times.handoffAt,
+        releaseAt: times.releaseAt,
+        beatSec: plan.out.beatSec,
+      });
+    }
+
     // the outgoing element hands its sound to the deck at the loop start, then pauses
     const og = from.gain.gain;
     og.cancelScheduledValues(now);
@@ -890,6 +984,7 @@ export class AutoDJ {
       fallback: false,
       style: 'loop',
       reason: null,
+      rejectedStylesAndWhy: this.loopRefusal ? [{ style: 'loop' as const, reason: this.loopRefusal }] : [],
     };
     this.blend = { from, to, handedOff: false };
     this.window = { videoId: cur.fileKey, startSec: plan.out.loop[0], endSec: plan.out.loop[1] };
@@ -907,6 +1002,8 @@ export class AutoDJ {
       recordTransition(this.pendingEvent);
       this.pendingEvent = null;
     }
+    // Clear scheduler plan
+    this.scheduler?.setPlan(null);
     const blend = this.blend;
     if (blend && this.loopTimes && this.loopDecks) {
       for (const d of this.loopDecks) d.stop();
