@@ -3,7 +3,7 @@
 
 import type { TrackAnalysis } from '../analysis/types';
 import type { Deck } from './deck';
-import { gridOf, phraseAtOrBefore, phraseAtOrAfter, downbeatAtOrAfter, BEATS_PER_BAR } from './grid';
+import { gridOf, phraseAtOrBefore, phraseAtOrAfter, downbeatAtOrAfter, BEATS_PER_BAR } from './grid.js';
 import {
   mixOutAnchor,
   VOCAL_ACTIVE,
@@ -14,11 +14,11 @@ import {
   percentile,
   incomingGainCompensation,
   MAX_LUFS_COMPENSATION_DB,
-} from './policy';
-import type { CurveView } from './policy';
-import type { MixStyle } from '../telemetry';
-import { chooseBassSwapBeat, shouldSuppressBassSwap } from './bass-swap';
-import type { BassSwapCurves, BassSwapParams } from './bass-swap';
+} from './policy.js';
+import type { CurveView } from './policy.js';
+import type { MixStyle } from '../telemetry.js';
+import { chooseBassSwapBeat, shouldSuppressBassSwap } from './bass-swap.js';
+import type { BassSwapCurves, BassSwapParams } from './bass-swap.js';
 
 export interface TransitionRequest {
   from: Deck;
