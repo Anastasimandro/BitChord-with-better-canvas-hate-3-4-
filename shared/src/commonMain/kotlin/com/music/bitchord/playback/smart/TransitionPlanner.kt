@@ -427,9 +427,19 @@ private fun alignedTransitionStart(
  */
 const val MAX_INCOMING_SKIP_FRACTION = 0.25
 
+/** Phase 2 Task 5: hard ceiling in bars from the first audible downbeat (mirrors web). */
+const val INCOMING_MAX_ADVANCE_BARS = 8
+
 /** The deepest an incoming song of [length] seconds may be cued; unbounded when the length is unknown. */
 fun latestIncomingCue(length: Double): Double =
     if (length.isFinite() && length > 0) length * MAX_INCOMING_SKIP_FRACTION else Double.POSITIVE_INFINITY
+
+/** Phase 2 Task 5: cap from first audible downbeat — min of 25% duration and +8 bars. */
+fun latestIncomingCueFromFirstAudible(firstAudible: Double, length: Double, beatInterval: Double): Double {
+    val capByFraction = latestIncomingCue(length)
+    val capByBars = if (beatInterval > 0) firstAudible + INCOMING_MAX_ADVANCE_BARS * 4 * beatInterval else Double.POSITIVE_INFINITY
+    return min(capByFraction, capByBars)
+}
 
 /**
  * Where the incoming track's arrangement arrives: the point the outgoing
@@ -467,16 +477,18 @@ fun latestIncomingCue(length: Double): Double =
 }
 
 /**
- * [plan] with its incoming side pulled back to within [latestIncomingCue] of
+ * [plan] with its incoming side pulled back to within the strict skip cap of
  * [nextLength], by whole incoming bars so a beat-aligned entry stays aligned.
+ * Phase 2 Task 5: cap is min(25% duration, firstAudible + 8 bars).
  * The backstop behind the capped candidate choice above, for every path —
  * an arrangement overlap or a stretch can still carry a cue past the line.
  */
 private fun capIncomingSkip(plan: TransitionPlan, nextAnalysis: TrackAnalysis, nextLength: Double): TransitionPlan {
-    val latest = latestIncomingCue(nextLength)
-    if (plan.incomingCueTime <= latest) return plan
+    val firstAudible = incomingStartPoint(nextAnalysis)
     val beat = nextAnalysis.beatInterval.orZero().takeIf { it > 0 }
         ?: if (nextAnalysis.bpm.orZero() > 0) 60 / nextAnalysis.bpm else 0.0
+    val latest = latestIncomingCueFromFirstAudible(firstAudible, nextLength, beat)
+    if (plan.incomingCueTime <= latest) return plan
     val over = plan.incomingCueTime - latest
     val shift = if (beat > 0) ceil(over / (4 * beat)) * 4 * beat else over
     val cue = max(0.0, plan.incomingCueTime - shift)
@@ -713,6 +725,14 @@ private fun phraseBarPlan(
     )
     val hasBassContent = analysis.lowEnergyCurve.isNotEmpty() || nextAnalysis.lowEnergyCurve.isNotEmpty()
 
+    // LUFS gain compensation and residual delta for bass swap gate
+    val outLufs = analysis.lufsTail ?: analysis.lufs
+    val inLufs = nextAnalysis.lufsHead ?: nextAnalysis.lufs
+    val rawDeltaDb = if (outLufs != null && inLufs != null) outLufs - inLufs else null
+    val appliedCompensationDb = rawDeltaDb?.let { max(-6.0, min(6.0, it)) }
+    val residualDeltaDb = if (rawDeltaDb != null && appliedCompensationDb != null) rawDeltaDb - appliedCompensationDb else null
+    val suppressBassSwapByLufs = residualDeltaDb?.let { abs(it) > 4.0 } ?: false
+
     return TransitionPlan(
         markerVisible = true,
         transitionStart = transitionStart,
@@ -726,7 +746,7 @@ private fun phraseBarPlan(
         outgoingPlaybackRate = outgoingPlaybackRate,
         pickupSeconds = audibleStart,
         transitionBeats = overlapBeats,
-        bassSwap = beatmatched || hasBassContent,
+        bassSwap = (beatmatched || hasBassContent) && !suppressBassSwapByLufs,
         handoffFraction = HANDOFF_FRACTION,
         bedPosition = BED_POSITION,
         bassSwapFraction = bassSwapFraction,
@@ -1184,6 +1204,15 @@ private fun phraseSwitch(
 
     val overlap = planned.transitionEnd - planned.transitionStart
     val renderedIncomingRate = incomingRateFor(planned.stretchRatio, advanced)
+
+    // LUFS gain compensation and residual delta for bass swap gate
+    val outLufs = analysis.lufsTail ?: analysis.lufs
+    val inLufs = nextAnalysis.lufsHead ?: nextAnalysis.lufs
+    val rawDeltaDb = if (outLufs != null && inLufs != null) outLufs - inLufs else null
+    val appliedCompensationDb = rawDeltaDb?.let { max(-6.0, min(6.0, it)) }
+    val residualDeltaDb = if (rawDeltaDb != null && appliedCompensationDb != null) rawDeltaDb - appliedCompensationDb else null
+    val suppressBassSwapByLufs = residualDeltaDb?.let { abs(it) > 4.0 } ?: false
+
     return TransitionPlan(
         markerVisible = true,
         transitionStart = planned.transitionStart,
@@ -1197,7 +1226,7 @@ private fun phraseSwitch(
         outgoingPlaybackRate = outgoingRateFor(planned.stretchRatio, advanced),
         pickupSeconds = incomingAudibleStart(nextAnalysis),
         transitionBeats = planned.beats,
-        bassSwap = true,
+        bassSwap = !suppressBassSwapByLufs,
         handoffFraction = planned.handoffFraction,
         bedPosition = planned.bedPosition,
         bassSwapFraction = planned.bassSwapFraction,
@@ -1917,6 +1946,15 @@ private fun mixPlan(
 
     val alignedOverlap = mixEnd - transitionStart
     val hasBassContent = analysis.lowEnergyCurve.isNotEmpty() || nextAnalysis.lowEnergyCurve.isNotEmpty()
+
+    // LUFS gain compensation and residual delta for bass swap gate
+    val outLufs = analysis.lufsTail ?: analysis.lufs
+    val inLufs = nextAnalysis.lufsHead ?: nextAnalysis.lufs
+    val rawDeltaDb = if (outLufs != null && inLufs != null) outLufs - inLufs else null
+    val appliedCompensationDb = rawDeltaDb?.let { max(-6.0, min(6.0, it)) }
+    val residualDeltaDb = if (rawDeltaDb != null && appliedCompensationDb != null) rawDeltaDb - appliedCompensationDb else null
+    val suppressBassSwapByLufs = residualDeltaDb?.let { abs(it) > 4.0 } ?: false
+
     val measuredVocalOverlap = plannedVocalOverlap(
         analysis = analysis,
         nextAnalysis = nextAnalysis,
@@ -1954,7 +1992,7 @@ private fun mixPlan(
         outgoingPlaybackRate = outgoingRateFor(incomingPlaybackRate, traits != null),
         pickupSeconds = pickupSeconds,
         transitionBeats = transitionBeats,
-        bassSwap = sameBeatBlend || hasBassContent,
+        bassSwap = (sameBeatBlend || hasBassContent) && !suppressBassSwapByLufs,
         transitionStyle = if (sameBeatBlend) TransitionStyle.DJ_BLEND else TransitionStyle.DJ_FILTER,
         // The two styles are alternatives, not a scale: a matched pair hands the
         // low end over on a beat and otherwise stays open, while an unmatched
