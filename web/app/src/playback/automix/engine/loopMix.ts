@@ -118,6 +118,8 @@ export interface LoopMixTimes {
  * [buffers] are the decoded songs, for loudness; [earliestOutSec] is the
  * earliest the outgoing loop may start (the playhead plus setup time);
  * [sung] is each song's sung lines from its synced lyrics, when it has them.
+ * [offsets] place each buffer on its track's own timeline — the ranged
+ * decodes cover one edge, not the whole song (Phase 1).
  */
 export function planLoopMix(
   out: TrackAnalysis,
@@ -126,17 +128,20 @@ export function planLoopMix(
   inBuffer: AudioBuffer,
   earliestOutSec: number,
   sung: { out?: SungSpans | null; in?: SungSpans | null } = {},
+  /** BitChord, Phase 0: why no loop mix exists, for the transition event. */
+  refuse?: (why: string) => void,
+  offsets: { out: number; in: number } = { out: 0, in: 0 },
 ): LoopMixPlan | null {
-  if (!out.beatIntervalSec || out.firstDownbeatSec === null || !out.bpm) return null;
-  if (!inn.beatIntervalSec || inn.firstDownbeatSec === null || !inn.bpm) return null;
+  if (!out.beatIntervalSec || out.firstDownbeatSec === null || !out.bpm) return refuse?.('no beat grid on a side') ?? null;
+  if (!inn.beatIntervalSec || inn.firstDownbeatSec === null || !inn.bpm) return refuse?.('no beat grid on a side') ?? null;
   // A music video's audio rarely matches its lyrics' timing (they are the
   // album cut's), so nothing can vouch for its bars: no loop on either side.
-  if (out.musicVideo || inn.musicVideo) return null;
+  if (out.musicVideo || inn.musicVideo) return refuse?.('music video: its audio is not the album cut') ?? null;
   const outBar = out.beatIntervalSec * 4;
   const inBar = inn.beatIntervalSec * 4;
 
   // outgoing: the latest instrumental loop that ends before the song does
-  const outEnd = Math.min(out.durationSec - 0.5, outBuffer.duration - 0.1);
+  const outEnd = Math.min(out.durationSec - 0.5, offsets.out + outBuffer.duration - 0.1);
   const outFirst = Math.max(earliestOutSec, out.durationSec - OUT_SEARCH_SEC);
   const outPick = firstClean(
     (bars) => loopsBetween(out.tailBeats, out.firstDownbeatSec!, outBar, outFirst, outEnd, bars).reverse(),
@@ -144,19 +149,21 @@ export function planLoopMix(
     out.vocals ?? [],
     sung.out ?? null,
     out.beatIntervalSec,
+    offsets.out,
   );
-  if (outPick === null) return null;
+  if (outPick === null) return refuse?.('no instrumental loop in the outgoing ending') ?? null;
 
   // incoming: the earliest instrumental loop in its opening
-  const inEnd = Math.min(IN_SEARCH_SEC + LOOP_BARS * inBar, inBuffer.duration - 20);
+  const inEnd = Math.min(IN_SEARCH_SEC + LOOP_BARS * inBar, offsets.in + inBuffer.duration - 20);
   const inPick = firstClean(
     (bars) => loopsBetween(inn.headBeats, inn.firstDownbeatSec!, inBar, 0, inEnd, bars),
     inBuffer,
     inn.vocals ?? [],
     sung.in ?? null,
     inn.beatIntervalSec,
+    offsets.in,
   );
-  if (inPick === null) return null;
+  if (inPick === null) return refuse?.('no instrumental loop in the incoming opening') ?? null;
   // a loop's own length is its tempo: its beats exactly, bar line to bar line
   const outBeat = (outPick.end - outPick.start) / (outPick.bars * 4);
   const inBeat = (inPick.end - inPick.start) / (inPick.bars * 4);
@@ -238,13 +245,15 @@ function firstClean(
   vocals: VocalWindow[],
   sung: SungSpans | null,
   beatSec: number,
+  /** Track time the buffer's first sample sits at (the ranged decodes cover one edge). */
+  bufferOffsetSec = 0,
 ): Clean | null {
   for (const bars of LOOP_LENGTHS) {
     const loops = candidates(bars);
     if (!loops.length) continue;
     // loudness of the quietest bar against the stretch's own: no fade-out tail, no breakdown
     const barLoud = (l: Span) =>
-      Math.min(...Array.from({ length: bars }, (_, b) => rms(buffer, l.start + (b * (l.end - l.start)) / bars, l.start + ((b + 1) * (l.end - l.start)) / bars)));
+      Math.min(...Array.from({ length: bars }, (_, b) => rms(buffer, l.start + (b * (l.end - l.start)) / bars, l.start + ((b + 1) * (l.end - l.start)) / bars, bufferOffsetSec)));
     const louds = loops.map(barLoud);
     const typical = [...louds].sort((a, b) => a - b)[Math.floor(louds.length * 0.6)] ?? 0;
     for (let i = 0; i < loops.length; i++) {
@@ -314,10 +323,12 @@ export function sungSpansFromLines(lines: { timeMs: number; endMs: number | null
   return spans;
 }
 
-function rms(buffer: AudioBuffer, from: number, to: number): number {
+function rms(buffer: AudioBuffer, from: number, to: number, bufferOffsetSec = 0): number {
   const data = buffer.getChannelData(0);
-  const a = Math.max(0, Math.floor(from * buffer.sampleRate));
-  const b = Math.min(data.length, Math.floor(to * buffer.sampleRate));
+  // [from, to) are track seconds; the buffer covers [offset, offset + duration]
+  const a = Math.max(0, Math.floor((from - bufferOffsetSec) * buffer.sampleRate));
+  const b = Math.min(data.length, Math.floor((to - bufferOffsetSec) * buffer.sampleRate));
+  if (b <= a) return 0;
   let ss = 0;
   let n = 0;
   for (let i = a; i < b; i += 16) {
@@ -334,7 +345,7 @@ function rms(buffer: AudioBuffer, from: number, to: number): number {
  * time the outgoing element reaches its loop start). Returns the times the
  * player needs: the handoff, and when and where the incoming element takes over.
  */
-export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: LoopDeck, t0: number): LoopMixTimes {
+export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: LoopDeck, t0: number, inGainComp = 1): LoopMixTimes {
   const { out, in: inn, fold } = plan;
   const beats = plan.totalBars * 4;
   const settleBeats = Math.round(SETTLE_BARS * 4 / fold);
@@ -382,7 +393,10 @@ export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: Lo
   outDeck.schedule(outChanges);
   inDeck.schedule(inChanges);
 
-  // gains: outgoing takes over from its element, the incoming loop rises over the entry and the ramp
+  // gains: outgoing takes over from its element, the incoming loop rises over
+  // the entry and the ramp. [inGainComp] is the LUFS gain compensation: the
+  // incoming deck sits at lufsOut - lufsIn (capped), so a louder master
+  // arrives at its matched level, and the element keeps it at the handover.
   const og = outDeck.gain.gain;
   const ig = inDeck.gain.gain;
   og.cancelScheduledValues(0);
@@ -392,12 +406,12 @@ export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: Lo
   const enterEnd = beatTimes[rampFrom]!;
   const rampEnd = beatTimes[rampTo]!;
   ig.setValueAtTime(0, t0);
-  ig.linearRampToValueAtTime(0.55, enterEnd);
+  ig.linearRampToValueAtTime(0.55 * inGainComp, enterEnd);
   og.setValueAtTime(1, enterEnd);
   og.linearRampToValueAtTime(0.6, rampEnd);
-  ig.linearRampToValueAtTime(1, rampEnd);
+  ig.linearRampToValueAtTime(1 * inGainComp, rampEnd);
   og.linearRampToValueAtTime(0, releaseAt);
-  ig.setValueAtTime(1, elementAt);
+  ig.setValueAtTime(inGainComp, elementAt);
   ig.linearRampToValueAtTime(0, elementAt + HANDOVER_SEC);
 
   // bass: the incoming loop comes in without it; they swap over one bar mid-ramp

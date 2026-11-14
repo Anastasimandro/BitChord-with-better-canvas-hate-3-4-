@@ -26,14 +26,87 @@ const MAX_BYTES = 40 * 1024 * 1024;
  * Throws when the track only streams over SABR, which has no file to fetch.
  */
 export async function fetchTrackAudio(videoId: string, signal?: AbortSignal): Promise<TrackAudio> {
-  let source = await resolveAudioUrl(videoId);
+  const source = await resolveAudioUrl(videoId);
+  const bytes = await fetchRange(videoId, source, 0, source.total, signal);
+  return { bytes, musicVideo: source.musicVideo };
+}
+
+/**
+ * BitChord, Automix 2.0 Phase 1: one EDGE of the track's audio, for the
+ * just-in-time ladder — the first [seconds] of it or the last. The ranges
+ * are edge-anchored, which is what makes them exact without a container
+ * index: a head range starts at byte 0 (the decoded buffer is the track's
+ * opening), a tail range ends at the last byte (the decoded buffer is the
+ * track's ending, however many seconds its decoder finds). A tail range has
+ * no container header of its own, so the first INIT_BYTES come along as
+ * well; a decoder that still refuses the concatenation gets the caller's
+ * full-fetch fallback.
+ *
+ * [durationSec] is the track's length (the player response carries it); the
+ * byte estimate is its bitrate. Without it the edge can't be aimed, and the
+ * whole file is fetched — the ladder degrades, it never guesses.
+ */
+export interface TrackAudioEdge extends TrackAudio {
+  /** The track's length in seconds, per the player response (0 when unknown). */
+  durationSec: number;
+  /** True when the edge couldn't be aimed and the whole file came back instead. */
+  fellBackToFull: boolean;
+}
+
+/** Over [margin], a bitrate estimate from content-length is still an estimate: clusters, art, metadata. */
+const EDGE_MARGIN = 1.35;
+/** Minimum aimed edge: the container header alone can be a tenth of a small request. */
+const MIN_EDGE_BYTES = 256 * 1024;
+/** Maximum aimed edge: no edge window in the ladder is worth more than this. */
+const MAX_EDGE_BYTES = 12 * 1024 * 1024;
+/** The container header fetched alongside a tail range, for the decoder. */
+const INIT_BYTES = 64 * 1024;
+
+export async function fetchTrackAudioEdge(
+  videoId: string,
+  edge: 'head' | 'tail',
+  seconds: number,
+  signal?: AbortSignal,
+): Promise<TrackAudioEdge> {
+  const source = await resolveAudioUrl(videoId);
+  const durationSec = source.durationSec;
+  const total = source.total;
+  if (!(durationSec > 0) || !(total > 0)) {
+    const bytes = await fetchRange(videoId, source, 0, source.total, signal);
+    return { bytes, musicVideo: source.musicVideo, durationSec, fellBackToFull: true };
+  }
+  const bytesPerSec = total / durationSec;
+  const span = Math.min(
+    MAX_EDGE_BYTES,
+    Math.max(MIN_EDGE_BYTES, Math.round(seconds * bytesPerSec * EDGE_MARGIN)),
+  );
+
+  if (edge === 'head') {
+    const bytes = await fetchRange(videoId, source, 0, Math.min(total, span), signal);
+    return { bytes, musicVideo: source.musicVideo, durationSec, fellBackToFull: false };
+  }
+
+  // The tail: the container's opening (header, tracks, and for WebM the
+  // SeekHead that points at the Cues), then the last [span] bytes.
+  const init = await fetchRange(videoId, source, 0, Math.min(total, INIT_BYTES), signal);
+  const from = Math.max(0, total - span);
+  const tail = await fetchRange(videoId, source, from, total, signal);
+  const out = new Uint8Array(init.byteLength + tail.byteLength);
+  out.set(new Uint8Array(init), 0);
+  out.set(new Uint8Array(tail), init.byteLength);
+  return { bytes: out.buffer, musicVideo: source.musicVideo, durationSec, fellBackToFull: false };
+}
+
+/** The bytes of [source] from [from] to [to] (exclusive end; 0 or past the end means "to the last byte"). */
+async function fetchRange(videoId: string, source: Awaited<ReturnType<typeof resolveAudioUrl>>, from: number, to: number, signal?: AbortSignal): Promise<ArrayBuffer> {
   const parts: Uint8Array[] = [];
-  let at = 0;
+  let at = from;
   let refusals = 0;
+  const endByte = to > 0 ? Math.min(to, from + MAX_BYTES) : 0;
   for (;;) {
     const { url, total } = source;
-    const end = total ? Math.min(total, at + CHUNK_BYTES) - 1 : at + CHUNK_BYTES - 1;
-    url.searchParams.set('range', `${at}-${end}`);
+    const rangeEnd = endByte ? Math.min(endByte, at + CHUNK_BYTES) - 1 : at + CHUNK_BYTES - 1;
+    url.searchParams.set('range', `${at}-${rangeEnd}`);
     const response = await fetch(url, { signal, credentials: 'omit' });
     if (response.status === 403 && refusals < MAX_REFUSALS) {
       // googlevideo sometimes refuses a URL part-way through; a fresh one
@@ -46,22 +119,26 @@ export async function fetchTrackAudio(videoId: string, signal?: AbortSignal): Pr
     const part = new Uint8Array(await response.arrayBuffer());
     parts.push(part);
     at += part.byteLength;
-    if (part.byteLength === 0 || (total ? at >= total : part.byteLength < CHUNK_BYTES) || at > MAX_BYTES) break;
+    const atEnd = endByte ? at >= endByte : part.byteLength < CHUNK_BYTES;
+    if (part.byteLength === 0 || atEnd || at - from > MAX_BYTES || (total ? at >= total : false)) break;
   }
 
-  const out = new Uint8Array(at);
+  const out = new Uint8Array(at - from);
   let offset = 0;
   for (const part of parts) {
     out.set(part, offset);
     offset += part.byteLength;
   }
-  return { bytes: out.buffer, musicVideo: source.musicVideo };
+  return out.buffer;
 }
 
 const MAX_REFUSALS = 2;
 
 /** A deciphered direct URL for the track's best audio (or the same itag, when resuming). */
-async function resolveAudioUrl(videoId: string, itag?: number): Promise<{ url: URL; total: number; itag: number; musicVideo: boolean }> {
+async function resolveAudioUrl(
+  videoId: string,
+  itag?: number,
+): Promise<{ url: URL; total: number; itag: number; musicVideo: boolean; durationSec: number }> {
   const { info, client, yt } = await resolveAsPlayerWould(videoId);
   const audio = (info.streaming_data?.adaptive_formats ?? []).filter(
     (f) => f.has_audio && !f.has_video && (f.url || f.signature_cipher || f.cipher) && !f.is_drc,
@@ -80,7 +157,11 @@ async function resolveAudioUrl(videoId: string, itag?: number): Promise<{ url: U
   const pictures = (info.streaming_data?.adaptive_formats ?? []).filter((f) => f.has_video && f.width && f.height);
   const widest = pictures.sort((a, b) => b.width! * b.height! - a.width! * a.height!)[0];
   const musicVideo = !!widest && widest.width! / widest.height! >= MIN_VIDEO_ASPECT;
-  return { url, total: format.content_length ?? 0, itag: format.itag, musicVideo };
+  // The player response's own duration: what the edge estimator aims its byte
+  // ranges with. A missing one (0) is the full-fetch fallback's cue.
+  const reported = (info as { video_details?: { duration?: number } }).video_details?.duration;
+  const durationSec = typeof reported === 'number' && reported > 0 ? reported : 0;
+  return { url, total: format.content_length ?? 0, itag: format.itag, musicVideo, durationSec };
 }
 
 /**

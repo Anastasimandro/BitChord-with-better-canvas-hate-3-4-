@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from 'react';
 import { useParty } from '@/party/listenTogether';
 import type { AutoDJSnapshot } from '@/playback/automix';
 import type { analyzer as Analyzer } from '@/playback/automix/analysis/analyzer';
+import { mixReport, type ReportStats } from '@/playback/automix/telemetry';
 import type { NowPlaying } from '@/state/player';
 import { usePlayer } from '@/state/player';
 
@@ -20,7 +21,59 @@ export function NerdStats() {
     <div className="mt-1 flex min-w-0 flex-col gap-px type-[500_11px/14px] tabular-nums [text-shadow:0_1px_4px_rgb(0_0_0/0.55)]">
       <span className="truncate text-secondary">{describeStream(nowPlaying) ?? 'Measuring the stream…'}</span>
       {automix && <AutomixLine videoId={nowPlaying.videoId} />}
+      {automix && <MixReport />}
     </div>
+  );
+}
+
+/**
+ * The mix report (Automix 2.0 Phase 0): what the mix loop chose and why,
+ * this session and across the local ring of ~500 events. Text and a table,
+ * no charts; one tap to open once stats for nerds are on.
+ */
+function MixReport() {
+  const [open, setOpen] = useState(false);
+  const [report, setReport] = useState<{ session: ReportStats; aggregate: ReportStats } | null>(null);
+  useEffect(() => {
+    if (open) setReport(mixReport());
+  }, [open]);
+  if (!open) {
+    return (
+      <button type="button" className="self-start truncate text-tertiary underline decoration-dotted" onClick={() => setOpen(true)}>
+        mix report
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-px text-tertiary">
+      <button type="button" className="self-start underline decoration-dotted" onClick={() => setOpen(false)}>
+        mix report
+      </button>
+      {report && <MixReportBody report={report} />}
+    </div>
+  );
+}
+
+/** "loop 3 · filter 2 · crossfade 1 · skip 12% · both grids 80%", sessions and all time. */
+function MixReportBody({ report }: { report: { session: ReportStats; aggregate: ReportStats } }) {
+  const line = (s: ReportStats) => {
+    if (!s.total) return 'no transitions recorded yet';
+    const styles = s.styles.length ? s.styles.map((st) => `${st.style} ${st.count}`).join(' · ') : 'none';
+    const skip = s.styles.some((st) => st.skipRate !== null)
+      ? ` · skipped ${Math.round(100 * (s.styles.reduce((a, st) => a + (st.skipRate ?? 0) * st.count, 0) / Math.max(1, s.completed)))}%`
+      : '';
+    const reasons = s.topReasons.length ? ` · ${s.topReasons.map((r) => `${r.reason} ×${r.count}`).join(' · ')}` : '';
+    return `${styles}${skip} · both grids ${Math.round(100 * s.hitRate)}%${reasons}`;
+  };
+  return (
+    <>
+      <span className="truncate">
+        session ({report.session.total}): {line(report.session)}
+      </span>
+      <span className="truncate">
+        all time ({report.aggregate.total}): {line(report.aggregate)}
+      </span>
+    </>
   );
 }
 

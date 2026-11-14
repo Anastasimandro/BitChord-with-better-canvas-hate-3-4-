@@ -233,6 +233,15 @@ data class TransitionPlan(
      */
     val beatSeconds: Double = 0.0,
     /**
+     * BitChord, Automix 2.0 Phase 0: this plan is a gap mix — the outgoing
+     * track plays to its content end, a [GAP_FADE_SECONDS] crossfade sits on
+     * the silence point, and the incoming track enters on its first audible
+     * downbeat. A recording property, reported as its own style, not a
+     * renderer instruction: the renderer executes the short crossfade like
+     * any other.
+     */
+    val isGapMix: Boolean = false,
+    /**
      * Both grids are trusted and the tempi are matched, so the renderer may
      * nudge the incoming track's speed to hold the two beats in phase.
      */
@@ -482,6 +491,96 @@ private fun capIncomingSkip(plan: TransitionPlan, nextAnalysis: TrackAnalysis, n
 private fun incomingStartPoint(analysis: TrackAnalysis): Double =
     listOfNotNull(analysis.audibleStartTime, analysis.pickupTime, analysis.firstBeat)
         .firstOrNull { it.isFinite() && it >= 0 } ?: 0.0
+
+// ---------------------------------------------------------------------------
+// Automix 2.0 Phase 0: the gap mix
+// ---------------------------------------------------------------------------
+
+/** The crossfade a gap mix runs at the silence point: audible, not a blend. */
+const val GAP_FADE_SECONDS = 0.4
+
+/** How far back from the content end the outgoing tail is read for a melodic close. */
+private const val GAP_CLOSE_WINDOW_SECONDS = 8.0
+
+/** The outgoing tail under this share of the track's own typical level reads as a close. */
+private const val GAP_CLOSE_ENERGY_RATIO = 0.55
+
+/** The window either side of the incoming first downbeat the opener is judged over. */
+private const val GAP_OPENER_WINDOW_SECONDS = 4.0
+
+/** Energy after the first downbeat must clear this multiple of the level before it. */
+private const val GAP_OPENER_ENERGY_RATIO = 1.15
+
+/**
+ * The gap plan, or null when the pair doesn't earn one: both grids trusted,
+ * the outgoing track closing melodically over its last seconds, and the
+ * incoming one opening clearly on its first audible downbeat. Two songs that
+ * both want the room left alone between them are best served by giving it to
+ * them — the crossfade at the silence point is a gesture, not a blend.
+ */
+private fun gapPlan(
+    analysis: TrackAnalysis,
+    nextAnalysis: TrackAnalysis,
+    finalMixAnchor: Double,
+    playbackTime: Double,
+    policy: TransitionPolicyVerdict,
+): TransitionPlan? {
+    // A gap landed on a wrong first downbeat is worse than a plain crossfade,
+    // so the grid gate is the DJ one on both sides, read directly rather than
+    // off the tier: [assessTransitionTier] returns PLAIN_CROSSFADE before its
+    // stretch checks, and a weak-grid pair must still get a plain crossfade,
+    // not a gap that trusts a grid nobody trusted.
+    if (analysis.beatConfidence.orZero() < MIN_DJ_CONFIDENCE ||
+        nextAnalysis.beatConfidence.orZero() < MIN_DJ_CONFIDENCE
+    ) {
+        return null
+    }
+    // Melodic close in the outgoing track: its last seconds sit well under
+    // the track's own typical level. Relative, never absolute — a quiet
+    // master and a loud one must both be able to close.
+    val typical = meanEnergy(analysis.energyCurve)
+    if (typical <= 0.0) return null
+    val tail = averageEnergy(
+        analysis.energyCurve,
+        finalMixAnchor - GAP_CLOSE_WINDOW_SECONDS,
+        finalMixAnchor,
+    ) ?: return null
+    if (tail >= typical * GAP_CLOSE_ENERGY_RATIO) return null
+    // Clear opener in the incoming track: its first audible downbeat, with
+    // the music rising after it rather than idling through another intro.
+    // Where nothing is measured before the downbeat (it is the track's first
+    // sound), the rise is judged against the track's own typical level: the
+    // opening has to hit above it, not merely exist.
+    val audibleFrom = incomingStartPoint(nextAnalysis)
+    val downbeat = (nextAnalysis.headBeats?.downbeats ?: nextAnalysis.downbeats)
+        .firstOrNull { it.isFinite() && it >= audibleFrom } ?: return null
+    val before = averageEnergy(
+        nextAnalysis.energyCurve,
+        max(audibleFrom, downbeat - GAP_OPENER_WINDOW_SECONDS),
+        downbeat,
+    ) ?: meanEnergy(nextAnalysis.energyCurve)
+    val after = averageEnergy(
+        nextAnalysis.energyCurve,
+        downbeat,
+        downbeat + GAP_OPENER_WINDOW_SECONDS,
+    ) ?: return null
+    if (after <= before * GAP_OPENER_ENERGY_RATIO) return null
+    val transitionStart = max(0.0, finalMixAnchor - GAP_FADE_SECONDS)
+    val started = playbackTime >= transitionStart
+    return TransitionPlan(
+        shouldStart = started,
+        markerVisible = true,
+        transitionStart = transitionStart,
+        transitionEnd = finalMixAnchor,
+        fadeSeconds = finalMixAnchor - transitionStart,
+        transitionStyle = TransitionStyle.EQUAL_POWER,
+        incomingCueTime = downbeat,
+        incomingHandoffTime = downbeat,
+        isGapMix = true,
+        policyReasons = policy.reasons,
+        reason = if (started) "smart-gap" else "before-smart-gap",
+    )
+}
 
 // ---------------------------------------------------------------------------
 // Apple-style Automix: fixed-length phrase mixes (8 or 16 bars)
@@ -1565,6 +1664,13 @@ private fun planTransitionInner(
     }
 
     val nextLength = max(nextAnalysis.duration.orZero(), trackDurationSeconds(nextTrack))
+
+    // The gap mix outranks the blend on the ladder: a pair this evidence
+    // describes — one closing, one opening cleanly — does not want an overlap
+    // at all. Weak grids fell through to the plain crossfade above; this gate
+    // re-reads the confidences directly for the same reason [gapPlan] does.
+    gapPlan(analysis, nextAnalysis, finalMixAnchor, playbackTime, policy)
+        ?.let { return capIncomingSkip(it, nextAnalysis, nextLength) }
 
     // A pair no speed-up can match that also clashes in key or sings on both
     // sides has nothing a DJ gesture can fix: every one of them put two loud,

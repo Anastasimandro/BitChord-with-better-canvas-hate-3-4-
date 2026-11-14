@@ -34,6 +34,8 @@ import com.music.bitchord.playback.smart.TransitionStyle
 import com.music.bitchord.playback.smart.TransitionTrackInfo
 import com.music.bitchord.playback.smart.echoTailSeconds
 import com.music.bitchord.playback.smart.planTransition
+import com.music.bitchord.data.TrackLog
+import com.music.bitchord.playback.smart.MixTelemetry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -385,6 +387,13 @@ class CrossfadeController(
 
     /** The Automix plan the transition in flight was armed from, for the mix popup; null for a standard fade. */
     private var planInFlight: TransitionPlan? = null
+
+    /**
+     * The telemetry event for the transition in flight: created when the mix
+     * is armed, closed as completed or aborted when it settles. Null for the
+     * standard (non-smart) fades, which record nothing.
+     */
+    private var telemetryEvent: MixTelemetry.TransitionEvent? = null
 
     /** The last reason logged for the seek bar's Automix marker showing or not, so it logs on change. */
     private var lastMarkerVerdict = ""
@@ -1462,6 +1471,16 @@ class CrossfadeController(
                 "sweep=${render.filterSweep}",
         )
 
+        // BitChord, Automix 2.0 Phase 0: the mix is decided — record it before
+        // anything can abort it, so aborted and completed both land in the ring.
+        if (smart && plan != null) {
+            val outItem = items.getOrNull(outgoingItemIndex)
+            val inItem = items.getOrNull(nextIndex)
+            if (outItem != null && inItem != null) {
+                telemetryEvent = recordMixEvent(plan, outItem, inItem)
+            }
+        }
+
         holdAtEnd(out)
 
         // Carried across so the incoming track inherits the listener's own
@@ -1658,6 +1677,81 @@ class CrossfadeController(
      * first sounded put a song on screen that could barely be heard yet, under
      * one that was still plainly playing.
      */
+    /**
+     * BitChord, Automix 2.0 Phase 0: the event one transition produces.
+     *
+     * [plan] is the planner's plan for a blend, filter mix, crossfade or gap
+     * mix, and null for a loop mix — the loop has no [TransitionPlan], only
+     * its own [LoopMix.Plan], and what it rejected is the pair's planner
+     * verdict rather than a loop gate. Recorded the moment the mix is armed,
+     * closed by [finish]/[bail] as completed or aborted.
+     */
+    private fun recordMixEvent(
+        plan: TransitionPlan?,
+        outItem: MediaItem,
+        inItem: MediaItem,
+    ): MixTelemetry.TransitionEvent {
+        val outAnalysis = analysisFor(outItem)
+        val inAnalysis = analysisFor(inItem)
+        val style = when {
+            plan == null -> MixTelemetry.STYLE_LOOP
+            plan.isGapMix -> MixTelemetry.STYLE_GAP
+            plan.transitionStyle == TransitionStyle.DJ_BLEND -> MixTelemetry.STYLE_BLEND
+            plan.transitionStyle == TransitionStyle.DJ_FILTER -> MixTelemetry.STYLE_FILTER
+            else -> MixTelemetry.STYLE_CROSSFADE
+        }
+        val gateReason = plan?.policyReasons?.firstOrNull()
+            ?: plan?.reason?.takeIf { it.isNotBlank() }
+            ?: "grids not trusted"
+        val rejected = when {
+            plan == null -> emptyList()
+            plan.isGapMix -> listOf(MixTelemetry.RejectedStyle(MixTelemetry.STYLE_BLEND, plan.reason))
+            plan.transitionStyle == TransitionStyle.DJ_FILTER ->
+                listOf(MixTelemetry.RejectedStyle(MixTelemetry.STYLE_BLEND, gateReason))
+            plan.transitionStyle == TransitionStyle.EQUAL_POWER -> listOf(
+                MixTelemetry.RejectedStyle(MixTelemetry.STYLE_BLEND, gateReason),
+                MixTelemetry.RejectedStyle(MixTelemetry.STYLE_FILTER, gateReason),
+            )
+            else -> emptyList()
+        }
+        val deltaTempoPct = if (outAnalysis.bpm > 0 && inAnalysis.bpm > 0) {
+            (inAnalysis.bpm - outAnalysis.bpm) / outAnalysis.bpm * 100.0
+        } else {
+            null
+        }
+        val deltaLufs = if (outAnalysis.lufs != null && inAnalysis.lufs != null) {
+            inAnalysis.lufs!! - outAnalysis.lufs!!
+        } else {
+            null
+        }
+        val event = MixTelemetry.TransitionEvent(
+            at = System.currentTimeMillis(),
+            pair = "${outItem.mediaId}>${inItem.mediaId}",
+            styleChosen = style,
+            rejectedStylesAndWhy = rejected,
+            reason = plan?.reason?.takeIf { it.isNotBlank() },
+            confidences = MixTelemetry.MixConfidences(
+                outGrid = outAnalysis.beatConfidence,
+                inGrid = inAnalysis.beatConfidence,
+                vocalOverlap = plan?.vocalOverlap?.takeIf { it > 0 },
+                deltaTempoPct = deltaTempoPct,
+                deltaLufs = deltaLufs,
+            ),
+            bothGridsReady = outAnalysis.isUsable && inAnalysis.isUsable &&
+                outAnalysis.tailBeats != null && inAnalysis.headBeats != null,
+        )
+        MixTelemetry.record(event)
+        TrackLog.i(
+            TAG,
+            "mix ${event.styleChosen} ${event.pair} · conf " +
+                "${"%.2f".format(Locale.ROOT, outAnalysis.beatConfidence)}/" +
+                "${"%.2f".format(Locale.ROOT, inAnalysis.beatConfidence)}" +
+                (deltaLufs?.let { " · Δ${"%.1f".format(Locale.ROOT, it)} LUFS" } ?: ""),
+            about = outItem.mediaId,
+        )
+        return event
+    }
+
     private fun startFade() {
         val out = outgoing ?: return bail()
         val into = incoming ?: return bail()
@@ -1717,6 +1811,9 @@ class CrossfadeController(
         listenTo(into)
         handedOff = true
         onHandoff(out, into)
+        // BitChord, Automix 2.0 Phase 0: the incoming track is the song now —
+        // the skip window opens.
+        telemetryEvent?.let { MixTelemetry.markHandoff(it) }
 
         // The outgoing player holds the whole queue too, and a standard
         // crossfade runs right up to its track's natural end — at which point
@@ -2551,8 +2648,23 @@ class CrossfadeController(
         armDeadline = SystemClock.elapsedRealtime() + LOOP_BUILD_TIMEOUT_MS
         holdAtEnd(out)
         val sampleRate = outPort.sampleRate
-        val inLevel = (loudnessGain(inItem.mediaId) / loudnessGain(outItem.mediaId))
-            .takeIf { it.isFinite() && it > 0f } ?: 1f
+        // BitChord, Automix 2.0 Phase 0: level-match the incoming deck from
+        // the analyses' own LUFS when both carry one, capped at ±6 dB —
+        // 10^(-0.3)..10^(+0.3) — so a badly mastered track is nudged toward
+        // the outgoing one, not slammed onto it. Without LUFS on both sides,
+        // the pre-Phase-0 loudnessGain ratio stands.
+        val outAnalysis = analysisFor(outItem)
+        val inAnalysis = analysisFor(inItem)
+        val inLevel = if (outAnalysis.lufs != null && inAnalysis.lufs != null) {
+            10.0.pow((outAnalysis.lufs!! - inAnalysis.lufs!!) / 20.0).coerceIn(10.0.pow(-0.3), 10.0.pow(0.3))
+                .toFloat()
+        } else {
+            (loudnessGain(inItem.mediaId) / loudnessGain(outItem.mediaId))
+                .takeIf { it.isFinite() && it > 0f } ?: 1f
+        }
+        // The loop is armed before anything can stop it: record the event
+        // now, and let [finishLoop]/[loopBail] close it.
+        telemetryEvent = recordMixEvent(null, outItem, inItem)
         Log.d(
             TAG,
             "loop build ${outItem.mediaId}->${inItem.mediaId} at ${sampleRate}Hz, loop at " +
@@ -2798,6 +2910,10 @@ class CrossfadeController(
     private fun loopBail(reason: String, settle: Boolean = true) {
         val session = loopSession
         Log.d(TAG, "loop mix stops ($phase): $reason")
+        // BitChord, Automix 2.0 Phase 0: the loop ended other than by playing
+        // out — record it as what it was. [finish] below sees no open event.
+        telemetryEvent?.let { MixTelemetry.complete(it, MixTelemetry.OUTCOME_ABORTED) }
+        telemetryEvent = null
         loopBuildJob?.cancel()
         loopBuildJob = null
         loopAlignJob?.cancel()
@@ -2893,7 +3009,12 @@ class CrossfadeController(
             val why = plan.policyReasons.firstOrNull()?.let { " · $it" }.orEmpty()
             val noLoop = loopRefusal?.let { " · no loop: $it" }.orEmpty()
             return when (plan.transitionStyle) {
-                TransitionStyle.EQUAL_POWER -> "Automix · crossfading $whenText · ${"%.0f".format(Locale.ROOT, plan.fadeSeconds)} s$why$noLoop"
+                TransitionStyle.EQUAL_POWER ->
+                    if (plan.isGapMix) {
+                        "Automix · gap mix $whenText · at the track's end$why$noLoop"
+                    } else {
+                        "Automix · crossfading $whenText · ${"%.0f".format(Locale.ROOT, plan.fadeSeconds)} s$why$noLoop"
+                    }
                 TransitionStyle.DJ_FILTER -> "Automix · filter mix $whenText · $length$why$noLoop"
                 else -> {
                     val rate = plan.incomingPlaybackRate
@@ -2942,6 +3063,9 @@ class CrossfadeController(
         Log.d(TAG, "bail from $phase")
         AppSettings.smartMixInProgress.value = false
         AppSettings.smartMixBlend.value = null
+        // BitChord, Automix 2.0 Phase 0: the mix never became the song.
+        telemetryEvent?.let { MixTelemetry.complete(it, MixTelemetry.OUTCOME_ABORTED) }
+        telemetryEvent = null
         clearMixView()
         if (!handedOff && phase != Phase.FADING) {
             // Nothing was ever audible; no ramp to run.
@@ -2964,6 +3088,10 @@ class CrossfadeController(
     private fun leavingOnBail(): ExoPlayer? = if (handedOff) outgoing else incoming
 
     private fun finish() {
+        // BitChord, Automix 2.0 Phase 0: close the event the mix opened. Only
+        // one of this and [bail] can — the abort clears the reference first.
+        telemetryEvent?.let { MixTelemetry.complete(it, MixTelemetry.OUTCOME_COMPLETED) }
+        telemetryEvent = null
         val wasTransitioning = phase != Phase.IDLE
         if (phase != Phase.IDLE) {
             Log.d(TAG, "finish from $phase")

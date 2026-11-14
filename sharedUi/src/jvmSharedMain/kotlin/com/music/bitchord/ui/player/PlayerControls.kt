@@ -117,6 +117,8 @@ import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.NerdStats
+import com.music.bitchord.playback.smart.MixTelemetry
+import kotlin.math.roundToInt
 import com.music.bitchord.data.listentogether.PartyMember
 import com.music.bitchord.data.settings.TrackAnalysisState
 import com.music.bitchord.data.settings.AudioQuality
@@ -374,6 +376,10 @@ internal fun SleeveNerdStats(song: Song, modifier: Modifier = Modifier) {
     val smartFadeOn by PlayerSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val smartAnalysis by PlayerSettings.smartAnalysis.collectAsStateWithLifecycle()
     val automixDetail by PlayerSettings.automixDetail.collectAsStateWithLifecycle()
+    // BitChord, Automix 2.0 Phase 0: the mix report. Read once per song — the
+    // ring moves one event per transition, and a stat line that re-reads the
+    // file mid-transition would churn for nothing.
+    val mixReport = remember(song.videoId) { MixTelemetry.report() }
     // A party doesn't mix, and doesn't analyse for one either — see
     // [com.music.bitchord.playback.CrossfadeController]. So the two flows above
     // simply stop moving there, and the stats line has to say why rather than
@@ -446,6 +452,54 @@ internal fun SleeveNerdStats(song: Song, modifier: Modifier = Modifier) {
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
+        }
+        // BitChord, Automix 2.0 Phase 0: the mix report, under the analysis
+        // line. What the mix actually did across the ring — styles, how often
+        // the incoming track was skipped inside the window, the share of
+        // mixes planned with both grids ready (the analysis race Phase 1
+        // fixes), and the reasons the planner degraded. Local to the device.
+        if (smartFadeOn && mixReport.total > 0) {
+            Text(
+                text = stringResource(
+                    Res.string.mix_report_summary,
+                    mixReport.completed,
+                    mixReport.total,
+                    (mixReport.hitRate * 100).roundToInt(),
+                ),
+                style = nerdStyle,
+                color = Color.White.copy(alpha = 0.5f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+            mixReport.styles.forEach { style ->
+                Text(
+                    text = stringResource(
+                        Res.string.mix_report_style_line,
+                        style.style,
+                        style.count,
+                        style.skipRate
+                            ?.let { (it * 100).roundToInt() }
+                            ?.let { stringResource(Res.string.mix_report_skip_rate, it) }
+                            ?: stringResource(Res.string.mix_report_no_skips),
+                    ),
+                    style = nerdStyle,
+                    color = Color.White.copy(alpha = 0.45f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            mixReport.topReasons.firstOrNull()?.let { (reason, count) ->
+                Text(
+                    text = stringResource(Res.string.mix_report_top_reason, reason, count),
+                    style = nerdStyle,
+                    color = Color.White.copy(alpha = 0.4f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

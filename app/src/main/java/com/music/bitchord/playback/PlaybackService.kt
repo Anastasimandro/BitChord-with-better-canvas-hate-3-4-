@@ -149,6 +149,7 @@ import com.music.bitchord.data.sources.StreamFormat
 import com.music.bitchord.data.sources.TrackMatcher
 import com.music.bitchord.playback.smart.AutomixAnalysisSource
 import com.music.bitchord.playback.smart.VersionAudioAligner
+import com.music.bitchord.playback.smart.MixTelemetry
 import com.music.bitchord.widget.MediaWidget
 import com.music.bitchord.widget.MediaWidgetSnapshot
 import com.music.bitchord.wear.WearBridge
@@ -1305,6 +1306,12 @@ class PlaybackService : MediaLibraryService() {
         localBitrateCache.clear()
         measuredBitrateCache.clear()
         QualityUpgrade.forgetLastSession()
+
+        // BitChord, Automix 2.0 Phase 0: where the mix report's event ring is
+        // kept — beside the analyses, resolved here because this is the
+        // earliest point the service can answer for filesDir. Set once; the
+        // ring persists across service instances like the analyses do.
+        MixTelemetry.directoryOf = { filesDir }
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
@@ -6140,6 +6147,10 @@ class PlaybackService : MediaLibraryService() {
     /** Drop every service-side reference that could resurrect the former queue. */
     private fun beginRadioQueue() {
         crossfade?.onSkipRequested()
+        // BitChord, Automix 2.0 Phase 0: a radio start is a deliberate advance
+        // over whatever was playing — annotated like any other skip.
+        player?.currentMediaItem?.mediaId
+            ?.let { MixTelemetry.annotateSkip(it) }
         clearBoundedContext()
         autoplayLoadJob?.cancel()
         autoplayLoadJob = null
@@ -8562,6 +8573,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            wrappedPlayer.currentMediaItem?.mediaId?.let { MixTelemetry.annotateSkip(it) }
             if (mediaItemIndex !in 0 until wrappedPlayer.mediaItemCount) return
             // The track already on the receiver: a position in it is the
             // receiver's to seek, not the paused phone's.
@@ -8593,6 +8605,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            wrappedPlayer.currentMediaItem?.mediaId?.let { MixTelemetry.annotateSkip(it) }
             if (cast.active) {
                 castPrevious()
                 return
@@ -8604,6 +8617,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            wrappedPlayer.currentMediaItem?.mediaId?.let { MixTelemetry.annotateSkip(it) }
             wrappedPlayer.seekToNextMediaItem()
         }
 
@@ -8611,6 +8625,7 @@ class PlaybackService : MediaLibraryService() {
             if (locked()) return
             onUserIntent()
             crossfade.onSkipRequested()
+            wrappedPlayer.currentMediaItem?.mediaId?.let { MixTelemetry.annotateSkip(it) }
             wrappedPlayer.seekToNext()
         }
     }

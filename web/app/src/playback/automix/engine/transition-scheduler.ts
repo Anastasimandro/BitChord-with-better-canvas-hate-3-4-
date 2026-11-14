@@ -4,6 +4,8 @@
 import type { TrackAnalysis } from '../analysis/types';
 import type { Deck } from './deck';
 import { gridOf, phraseAtOrBefore, phraseAtOrAfter, downbeatAtOrAfter, BEATS_PER_BAR } from './grid';
+import { mixOutAnchor } from './policy';
+import type { MixStyle } from '../telemetry';
 
 export interface TransitionRequest {
   from: Deck;
@@ -32,9 +34,11 @@ export interface TransitionPlan {
   /**
    * BitChord: how the blend is played. 'blend' is AutoMix's beatmatch;
    * 'filter' the phone's DJ_FILTER for a pair that can't be beatmatched;
-   * 'crossfade' AutoMix's fallback.
+   * 'crossfade' AutoMix's fallback; 'gap' the Phase 0 style — a melodic
+   * close into a clear opener hands over at the silence point instead of
+   * overlapping.
    */
-  style: 'blend' | 'filter' | 'crossfade' | 'loop';
+  style: MixStyle;
   /** BitChord: why a pair wasn't beatmatched, for stats for nerds. */
   reason: string | null;
 }
@@ -123,7 +127,9 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
     const earliestTrack = from.timeline.trackTimeAt(earliest) ?? fromPos;
     mixOutTrackTime = downbeatAtOrAfter(fromGrid, earliestTrack);
   } else {
-    const outro = fromAnalysis.outroStartSec ?? fromAnalysis.durationSec;
+    // BitChord: the silence trim and the false-ending rule live in the
+    // analysis (contentEndSec / a rejected outro); this anchor reads both.
+    const outro = mixOutAnchor(fromAnalysis);
     const blendInputSec = durationSec * outRate;
     mixOutTrackTime = phraseAtOrBefore(fromGrid, outro - blendInputSec);
     const latestStart = fromAnalysis.durationSec - blendInputSec - fromGrid.barSec;
@@ -243,7 +249,7 @@ function scheduleFilterMix(
   if (forceNow) {
     mixOutTrackTime = downbeatAtOrAfter(fromGrid, from.timeline.trackTimeAt(earliest) ?? fromPos);
   } else {
-    const outro = fromAnalysis.outroStartSec ?? fromAnalysis.durationSec;
+    const outro = mixOutAnchor(fromAnalysis);
     mixOutTrackTime = phraseAtOrBefore(fromGrid, outro - blendInputSec);
     mixOutTrackTime = Math.min(mixOutTrackTime, phraseAtOrBefore(fromGrid, fromAnalysis.durationSec - blendInputSec - fromGrid.barSec));
     if (mixOutTrackTime < fromPos) mixOutTrackTime = phraseAtOrAfter(fromGrid, from.timeline.trackTimeAt(earliest) ?? fromPos);
@@ -302,6 +308,51 @@ const FILTER_OPEN_HIGH_HZ = 20000;
 const FILTER_HP_END_HZ = 1800;
 /** Where the incoming low-pass starts: kick and bass only, the rest arriving as it opens. */
 const FILTER_LP_START_HZ = 350;
+
+/** The gap style's crossfade: a kiss, not a blend. */
+const GAP_FADE_SEC = 0.4;
+
+/**
+ * BitChord, Phase 0's GAP style: the outgoing track's last audible content
+ * hands to the incoming track's first downbeat over a very short crossfade
+ * at the silence point — a melodic close into a clear opener overlaps
+ * badly, and clean silence between them is the mix. No EQ, no filters: the
+ * two tracks barely touch.
+ */
+export function scheduleGapMix(req: TransitionRequest): TransitionPlan {
+  const { from, to, fromAnalysis, toAnalysis } = req;
+  const ctx = from.ctx;
+  const now = ctx.currentTime;
+  const earliest = now + Math.max(from.scheduleAhead, to.scheduleAhead) + 0.1;
+  const toGrid = gridOf(toAnalysis);
+  if (gridOf(fromAnalysis) === null || toGrid === null) return scheduleFallback(req, earliest, 'gap needs both grids');
+
+  // the silence point: where the outgoing track's audible content ends
+  const silenceAt = fromAnalysis.contentEndSec ?? fromAnalysis.outroStartSec ?? fromAnalysis.durationSec;
+  const mixOutTrackTime = Math.max(0, silenceAt - GAP_FADE_SEC);
+  const t0 = from.timeline.ctxTimeAt(mixOutTrackTime, now);
+  if (t0 === null || t0 < earliest) return scheduleFallback(req, earliest, 'the silence point is already gone');
+
+  // the incoming track enters at its first audible downbeat — never a best-drop search
+  const mixInTrackTime = Math.max(0, toAnalysis.firstDownbeatSec ?? 0);
+  to.playAt({ ctxTime: t0, trackTime: mixInTrackTime, rate: 1 });
+  from.pauseAt(t0 + GAP_FADE_SEC + 0.05);
+  applyEqualPowerCross(from.gain.gain, to.gain.gain, t0, GAP_FADE_SEC);
+  scheduleAfter(ctx, t0 + GAP_FADE_SEC + 0.2, () => {
+    from.eq.reset();
+    from.setVolume(1);
+  });
+  return {
+    t0,
+    durationSec: GAP_FADE_SEC,
+    mixInTrackTime,
+    mixOutTrackTime,
+    rate: 1,
+    fallback: false,
+    style: 'gap',
+    reason: 'melodic close into a clear opener',
+  };
+}
 
 /** No usable grid: plain equal-power volume fade, no beatmatch, no EQ moves. */
 function scheduleFallback(req: TransitionRequest, earliest: number, reason: string | null = null): TransitionPlan {

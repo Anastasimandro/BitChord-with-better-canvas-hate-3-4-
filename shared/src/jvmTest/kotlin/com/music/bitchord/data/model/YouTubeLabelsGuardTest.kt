@@ -55,7 +55,7 @@ class YouTubeLabelsGuardTest {
         val methodCallRegex = Regex("""\.(equals|contains|startsWith|endsWith|removePrefix|removeSuffix)\s*\([^)]*?"([^"]+)"[^)]*?\)""")
 
         for (dir in sourceDirs) {
-            dir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file in
+            dir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
                 if (file.name in ALLOWED_FILES) return@forEach
 
                 val lines = file.readLines()

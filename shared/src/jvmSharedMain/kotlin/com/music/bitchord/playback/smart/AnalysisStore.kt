@@ -203,6 +203,9 @@ class AnalysisStore(
         val tailBeats: StoredBeats? = null,
         val vocalWindows: List<StoredCurve> = emptyList(),
         val levelWindows: List<StoredCurve> = emptyList(),
+        val lufs: Double? = null,
+        val lufsHead: Double? = null,
+        val lufsTail: Double? = null,
     ) {
         fun toAnalysis(trackId: String) = TrackAnalysis(
             status = TrackAnalysis.STATUS_READY,
@@ -233,6 +236,9 @@ class AnalysisStore(
             tailBeats = tailBeats?.toSide(),
             vocalWindows = vocalWindows.map { it.toWindow() },
             levelWindows = levelWindows.map { it.toWindow() },
+            lufs = lufs,
+            lufsHead = lufsHead,
+            lufsTail = lufsTail,
         )
 
         companion object {
@@ -263,6 +269,9 @@ class AnalysisStore(
                 tailBeats = analysis.tailBeats?.let(StoredBeats::of),
                 vocalWindows = analysis.vocalWindows.map(StoredCurve::of),
                 levelWindows = analysis.levelWindows.map(StoredCurve::of),
+                lufs = analysis.lufs,
+                lufsHead = analysis.lufsHead,
+                lufsTail = analysis.lufsTail,
             )
         }
     }
@@ -331,7 +340,7 @@ class AnalysisStore(
          * re-analysis costs seconds, and a beat grid interpreted under the wrong
          * assumptions is silently wrong for the life of the file.
          */
-        const val SCHEMA_VERSION = 3
+        const val SCHEMA_VERSION = 4
 
         /** A few thousand tracks' worth, at tens of kilobytes each. */
         const val MAX_ENTRIES = 2_000

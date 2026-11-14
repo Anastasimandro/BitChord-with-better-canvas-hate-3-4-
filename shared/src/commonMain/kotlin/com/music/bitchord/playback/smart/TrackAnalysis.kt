@@ -114,6 +114,17 @@ data class TrackAnalysis(
      * judge one bar's loudness, which the 240-point [energyCurve] is not.
      */
     val levelWindows: List<CurveWindow> = emptyList(),
+
+    /**
+     * BitChord, Automix 2.0 Phase 0: integrated K-weighted loudness (LUFS-I,
+     * ITU-R BS.1770-4) of the whole track, and of its first and last half
+     * minute. Null until measured, and absent from every analysis that
+     * predates the measurement — the policy treats a null here as "no
+     * evidence" and never level-matches from it.
+     */
+    val lufs: Double? = null,
+    val lufsHead: Double? = null,
+    val lufsTail: Double? = null,
 ) {
     /**
      * Whether this analysis actually describes a track, as opposed to standing

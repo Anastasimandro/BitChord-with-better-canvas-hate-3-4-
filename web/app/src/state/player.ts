@@ -23,6 +23,7 @@ import {
 import { trackLog } from '@/playback/trackLog';
 import type { LoadedTrack, StreamStats, YouTubeEngine } from '@/playback/youtube/engine';
 import type { AutomixGraph, AutoDJSnapshot } from '@/playback/automix';
+import { annotateSkip } from '@/playback/automix/telemetry';
 
 export interface NowPlaying {
   videoId: string;
@@ -260,6 +261,13 @@ function ensureAutomix(): Promise<AutomixGraph | null> {
         next: () => {
           const plan = planNext(true);
           return plan?.kind === 'index' ? queued(plan.queue[plan.index]!) : null;
+        },
+        nextAfter: () => {
+          // the L0 prefetch target: the queue entry behind the next one
+          const plan = planNext(true);
+          if (plan?.kind !== 'index') return null;
+          const entry = plan.queue[plan.index + 1];
+          return entry ? queued(entry) : null;
         },
         loadBack: async (videoId) => {
           const back = all[1 - active]!;
@@ -733,6 +741,10 @@ function planNext(auto: boolean): NextPlan | null {
 }
 
 async function advance(auto: boolean): Promise<void> {
+  // BitChord, Phase 0: a user advance is the skip signal. If the track being
+  // left is the incoming track of a recent handoff, its transition event is
+  // annotated with how long it lasted — nothing more, no scoring yet.
+  const leaving = auto ? null : (usePlayer.getState().queue[usePlayer.getState().index]?.track.videoId ?? null);
   let plan = planNext(auto);
   if (!plan && usePlayer.getState().autoplay) {
     await refillAutoplay(true);
@@ -751,6 +763,7 @@ async function advance(auto: boolean): Promise<void> {
     }
     return;
   }
+  if (leaving && plan.queue[plan.index]?.track.videoId !== leaving) annotateSkip(leaving);
   usePlayer.setState({ queue: plan.queue });
   await startAt(plan.index, { auto });
 }

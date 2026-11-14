@@ -51,6 +51,8 @@ import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 import java.util.Locale
 
 /**
@@ -944,6 +946,10 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
     private class Structural(
         val features: TrackFeatures.Features?,
         val decodedShort: Boolean = false,
+        /** Integrated loudness of the whole decoded span, and of its edges; see [Loudness]. */
+        val lufs: Double? = null,
+        val lufsHead: Double? = null,
+        val lufsTail: Double? = null,
     )
 
     /**
@@ -1033,7 +1039,27 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
             pcm.samples
         }
 
-        return Structural(TrackFeatures.analyze(samples, effectiveDuration))
+        // LUFS is measured on the mono container-rate span the decoder just
+        // handed back, before the resample the DSP pass reads. The weighting
+        // is rate-independent (its coefficients are derived per rate), so the
+        // number agrees with whatever rate the container holds — and the
+        // head/tail slices are views, not copies, so the memory cost of the
+        // whole measurement is one array of ~4 hop sums per second.
+        // The decoder reports the rate as a Double; the weighting wants the
+        // integer rate the coefficients are derived at.
+        val decodeRate = pcm.sampleRate.roundToInt()
+        val lufs = Loudness.integratedLufs(pcm.samples, decodeRate)
+        val edge = min(pcm.samples.size, (LUFS_EDGE_SECONDS * decodeRate).roundToInt())
+        val lufsHead = Loudness.integratedLufs(pcm.samples, 0, edge, decodeRate)
+        val tailStart = pcm.samples.size - edge
+        val lufsTail = Loudness.integratedLufs(pcm.samples, tailStart, edge, decodeRate)
+
+        return Structural(
+            TrackFeatures.analyze(samples, effectiveDuration),
+            lufs = lufs,
+            lufsHead = lufsHead,
+            lufsTail = lufsTail,
+        )
     }
 
     /**
@@ -1130,7 +1156,8 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                 "beats=${headGrid?.beats?.size ?: 0}+${tailGrid?.beats?.size ?: 0} " +
                 "downbeats=${headGrid?.downbeats?.size ?: 0}+${tailGrid?.downbeats?.size ?: 0} " +
                 "vocalMask=${if (regions.any { it.vocalMask != null }) "model" else "dsp"} " +
-                "windows=${regions.size} vocalWindows=${regions.count { it.vocalWindow != null }}",
+                "windows=${regions.size} vocalWindows=${regions.count { it.vocalWindow != null }} " +
+                "lufs=${structural.lufs?.let { "%.1f".format(Locale.ROOT, it) }}",
         )
 
         return WholeTrack(
@@ -1170,6 +1197,9 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                 tailBeats = tailSide,
                 vocalWindows = regions.mapNotNull { it.vocalWindow },
                 levelWindows = regions.mapNotNull { it.levelWindow },
+                lufs = structural.lufs,
+                lufsHead = structural.lufsHead,
+                lufsTail = structural.lufsTail,
             ),
         )
     }
@@ -1613,6 +1643,13 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
          * refusing over that would refuse everything.
          */
         const val MIN_DECODED_FRACTION = 0.95
+
+        /**
+         * How much of either edge the edge-level LUFS reads: the first and
+         * last half minute, the part a transition actually plays across. The
+         * whole-track number carries the mix's overall level matching.
+         */
+        const val LUFS_EDGE_SECONDS = 30.0
 
         /** Refusals before a track is written off as truncated rather than still filling in. */
         const val MAX_SHORT_DECODE_ATTEMPTS = 3
