@@ -2,7 +2,7 @@ import { useEffect, useReducer, useState } from 'react';
 import { useParty } from '@/party/listenTogether';
 import type { AutoDJSnapshot } from '@/playback/automix';
 import type { analyzer as Analyzer } from '@/playback/automix/analysis/analyzer';
-import { mixReport, type ReportStats } from '@/playback/automix/telemetry';
+import { mixReport, type ReportStats, type MixGesture } from '@/playback/automix/telemetry';
 import type { NowPlaying } from '@/state/player';
 import { usePlayer } from '@/state/player';
 
@@ -65,6 +65,14 @@ function MixReportBody({ report }: { report: { session: ReportStats; aggregate: 
     const reasons = s.topReasons.length ? ` · ${s.topReasons.map((r) => `${r.reason} ×${r.count}`).join(' · ')}` : '';
     return `${styles}${skip} · both grids ${Math.round(100 * s.hitRate)}%${reasons}`;
   };
+  const gestureLine = (s: ReportStats) => {
+    if (!s.total) return 'no gestures recorded yet';
+    const gestures = s.gestures.length ? s.gestures.map((g) => `${g.gesture} ${g.count}`).join(' · ') : 'none';
+    const skip = s.gestures.some((g) => g.skipRate !== null)
+      ? ` · skipped ${Math.round(100 * (s.gestures.reduce((a, g) => a + (g.skipRate ?? 0) * g.count, 0) / Math.max(1, s.completed)))}%`
+      : '';
+    return `${gestures}${skip}`;
+  };
   return (
     <>
       <span className="truncate">
@@ -72,6 +80,12 @@ function MixReportBody({ report }: { report: { session: ReportStats; aggregate: 
       </span>
       <span className="truncate">
         all time ({report.aggregate.total}): {line(report.aggregate)}
+      </span>
+      <span className="truncate">
+        gestures (session): {gestureLine(report.session)}
+      </span>
+      <span className="truncate">
+        gestures (all time): {gestureLine(report.aggregate)}
       </span>
     </>
   );

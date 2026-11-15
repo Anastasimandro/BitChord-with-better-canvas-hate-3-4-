@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TrackAnalysis } from '../analysis/types';
+import type { TrackAnalysis, VocalWindow } from '../analysis/types';
 import {
   contentEndOf,
   detectGap,
@@ -9,8 +9,12 @@ import {
   mixLufsOf,
   mixOutAnchor,
   percentile,
+  plannedVocalOverlap,
   tailView,
   trailingSilenceSec,
+  VOCAL_ACTIVE,
+  VOCAL_OVERLAP_BLEND_GATE,
+  vocalShare,
   wholeView,
   type CurveView,
 } from './policy';
@@ -171,5 +175,105 @@ describe('gain compensation', () => {
     expect(mixLufsOf(a, 'tail')).toBe(-16);
     expect(mixLufsOf(a, 'head')).toBe(-14);
     expect(mixLufsOf(null, 'head')).toBeNull();
+  });
+});
+
+describe('plannedVocalOverlap', () => {
+  /** Create a VocalWindow with a simple curve at 10 fps. */
+  function vw(startSec: number, curve: number[], fps = 10): VocalWindow {
+    return { startSec, fps, curve };
+  }
+
+  it('returns null when either side has no vocal windows', () => {
+    expect(plannedVocalOverlap([], [vw(0, [0.5])], 0, 10, 0, 1)).toBeNull();
+    expect(plannedVocalOverlap([vw(0, [0.5])], [], 0, 10, 0, 1)).toBeNull();
+  });
+
+  it('returns null for degenerate windows', () => {
+    expect(plannedVocalOverlap([vw(0, [0.5])], [vw(0, [0.5])], 10, 5, 0, 1)).toBeNull();
+    expect(plannedVocalOverlap([vw(0, [0.5])], [vw(0, [0.5])], 5, 5, 0, 1)).toBeNull();
+  });
+
+  it('returns 0 when no simultaneous vocal (both below threshold)', () => {
+    const out = [vw(0, [0.1, 0.1, 0.1])];
+    const inn = [vw(0, [0.1, 0.1, 0.1])];
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 1)).toBe(0);
+  });
+
+  it('returns 0 when only one side is vocal', () => {
+    const out = [vw(0, [0.5, 0.5, 0.5])]; // above 0.25
+    const inn = [vw(0, [0.1, 0.1, 0.1])]; // below 0.25
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 1)).toBe(0);
+  });
+
+  it('returns 1 when both sides fully vocal at rate 1', () => {
+    const out = [vw(0, [0.5, 0.5, 0.5])];
+    const inn = [vw(0, [0.5, 0.5, 0.5])];
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 1)).toBe(1);
+  });
+
+  it('returns partial fraction when some frames overlap', () => {
+    // 3 frames: first 2 both vocal, last 1 only outgoing
+    const out = [vw(0, [0.5, 0.5, 0.5])];
+    const inn = [vw(0, [0.5, 0.5, 0.1])];
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 1)).toBeCloseTo(2 / 3, 5);
+  });
+
+  it('scales incoming window by playbackRate (rate > 1 stretches incoming)', () => {
+    // Outgoing 0.3s at 10 fps = 3 frames. Rate 1.25 means incoming covers 0.375s of its own time.
+    // If incoming has vocal for 0.375s (3.75 frames at 10 fps), and outgoing has 0.3s vocal,
+    // the overlap fraction depends on how the windows align.
+    const out = [vw(0, [0.5, 0.5, 0.5])]; // 0.3s vocal
+    const inn = [vw(0, [0.5, 0.5, 0.5, 0.5])]; // 0.4s vocal at 10 fps
+    // rate=1.25: outgoing 0.3s maps to incoming 0.375s
+    // Both fully vocal in their windows -> fraction should be 1
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 1.25)).toBe(1);
+  });
+
+  it('rate < 1 compresses incoming window', () => {
+    // Rate 0.9: outgoing 0.3s maps to incoming 0.27s
+    const out = [vw(0, [0.5, 0.5, 0.5])];
+    const inn = [vw(0, [0.5, 0.5, 0.5])];
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 0.9)).toBe(1);
+  });
+
+  it('handles offset incoming start (inStart != 0)', () => {
+    const out = [vw(0, [0.5, 0.5, 0.5])]; // vocal at [0, 0.3]
+    const inn = [vw(1, [0.5, 0.5, 0.5])]; // vocal at [1, 1.3]
+    // Overlap window [0, 0.3] on outgoing maps to [1, 1.3] on incoming at rate=1
+    // Both fully vocal -> fraction = 1
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 1, 1)).toBe(1);
+  });
+
+  it('unmeasured regions default to neutral 0.5 (below VOCAL_ACTIVE)', () => {
+    // Outgoing has vocal for 0.3s, incoming window starts at 0.5s (no overlap in vocal regions)
+    const out = [vw(0, [0.5, 0.5, 0.5])];
+    const inn = [vw(0, [0.1, 0.1, 0.1])]; // no vocal
+    expect(plannedVocalOverlap(out, inn, 0, 0.3, 0, 1)).toBe(0);
+  });
+});
+
+describe('vocalShare', () => {
+  function vw(startSec: number, curve: number[], fps = 10): VocalWindow {
+    return { startSec, fps, curve };
+  }
+
+  it('returns null for empty windows', () => {
+    expect(vocalShare([], 0, 10)).toBeNull();
+  });
+
+  it('returns fraction above VOCAL_ACTIVE', () => {
+    const w = [vw(0, [0.1, 0.5, 0.5, 0.1])]; // 4 frames, 2 above 0.25
+    expect(vocalShare(w, 0, 0.4)).toBe(0.5);
+  });
+
+  it('returns 0 when all below threshold', () => {
+    const w = [vw(0, [0.1, 0.1, 0.1])];
+    expect(vocalShare(w, 0, 0.3)).toBe(0);
+  });
+
+  it('returns 1 when all above threshold', () => {
+    const w = [vw(0, [0.5, 0.5, 0.5])];
+    expect(vocalShare(w, 0, 0.3)).toBe(1);
   });
 });

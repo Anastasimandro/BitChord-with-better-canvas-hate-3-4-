@@ -10,12 +10,12 @@
 // at the blend's midpoint, where the phone's CrossfadeController hands over.
 import type { TrackAnalysis } from '../analysis/types';
 import { analyzer } from '../analysis/analyzer';
-import { recordTransition, markHandoff, type RejectedStyle, type TransitionEvent } from '../telemetry';
+import { recordTransition, markHandoff, type RejectedStyle, type TransitionEvent, type MixGesture } from '../telemetry';
 import type { Deck } from './deck';
 import type { Candidate } from './selector';
 import { scheduleTransition, scheduleGapMix, plannedBars, MIN_GRID_CONFIDENCE, type TransitionPlan, scheduleWithStyleScorer } from './transition-scheduler';
 import { asOutgoing, gridOf, phraseAtOrBefore } from './grid';
-import { detectGap, incomingGainCompensation, mixLufsOf, plannedVocalOverlap, VOCAL_ACTIVE, computeEnergyContinuity, computeLowEnergyAtJoin } from './policy';
+import { detectGap, incomingGainCompensation, mixLufsOf, plannedVocalOverlap, scoreDelayGesture, VOCAL_ACTIVE, computeEnergyContinuity, computeLowEnergyAtJoin } from './policy';
 import type { LoopDeck } from './loopDeck';
 import { Scheduler, createAutoDJHandoffHandler } from './scheduler';
 import {
@@ -715,6 +715,13 @@ export class AutoDJ {
           : outGrid && inGrid
             ? ((inGrid.bpm - outGrid.bpm) / outGrid.bpm) * 100
             : null;
+    // Phase 3: gesture fields (stub defaults)
+    const gesture = (plan.gesture ?? 'none') as MixGesture;
+    const gestureSeconds = plan.gestureSeconds ?? 0;
+    const rejectedGesturesAndWhy = (plan.rejectedGesturesAndWhy ?? []).map(r => ({
+      gesture: r.gesture as MixGesture,
+      reason: r.reason,
+    }));
     return {
       at: Date.now(),
       pair: `${cur.fileKey}>${next.fileKey}`,
@@ -740,6 +747,9 @@ export class AutoDJ {
       outcome: 'completed',
       skipAfterSec: null,
       handedOffAt: null,
+      gesture,
+      gestureSeconds,
+      rejectedGesturesAndWhy,
     };
   }
 
@@ -942,7 +952,11 @@ export class AutoDJ {
     // BitChord, Phase 0: the incoming deck sits at lufsOut - lufsIn (capped
     // at +/-6 dB), and its element keeps the compensation at the handover.
     const comp = incomingGainCompensation(cur, analyzer.get(plan.in.key));
-    const times = scheduleLoopMix(plan, outDeck, inDeck, t0, comp);
+    // Phase 3 Task 2: the same scorer decision the blend path makes — the
+    // delay throw engages only on AIR + trusted grid, never by default.
+    const delayDecision = scoreDelayGesture({ out: asOutgoing(cur), outGridConf: cur.gridConfidence });
+    const gesture = delayDecision.chosen && delayDecision.delaySec ? { delaySec: delayDecision.delaySec } : null;
+    const times = scheduleLoopMix(plan, outDeck, inDeck, t0, comp, gesture);
     this.host.hold(true);
 
     // Attach loop decks to scheduler for beat-accurate dispatch
@@ -985,6 +999,11 @@ export class AutoDJ {
       style: 'loop',
       reason: null,
       rejectedStylesAndWhy: this.loopRefusal ? [{ style: 'loop' as const, reason: this.loopRefusal }] : [],
+      gesture: gesture ? 'delay' : 'none',
+      gestureSeconds: gesture?.delaySec ?? 0,
+      rejectedGesturesAndWhy: gesture
+        ? []
+        : [{ gesture: 'delay' as const, reason: delayDecision.killReason ?? 'unknown' }],
     };
     this.blend = { from, to, handedOff: false };
     this.window = { videoId: cur.fileKey, startSec: plan.out.loop[0], endSec: plan.out.loop[1] };

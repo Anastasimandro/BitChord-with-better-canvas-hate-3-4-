@@ -19,6 +19,9 @@ export interface TransitionRequest {
   forceNow?: boolean;
 }
 
+/** Phase 3: the FX gesture used for this transition, if any. */
+export type MixGesture = 'none' | 'delay' | 'reverb' | 'both';
+
 export interface TransitionPlan {
   /** AudioContext time the blend starts. */
   t0: number;
@@ -44,6 +47,12 @@ export interface TransitionPlan {
   reason: string | null;
   /** Phase 2 Task 6: styles rejected by the scorer and the gate that killed each. */
   rejectedStylesAndWhy?: { style: MixStyle; reason: string }[];
+  /** Phase 3: the FX gesture chosen for this transition. */
+  gesture?: MixGesture;
+  /** Phase 3: total gesture seconds (delay + reverb). */
+  gestureSeconds?: number;
+  /** Phase 3: gestures considered and rejected, with reasons. */
+  rejectedGesturesAndWhy?: { gesture: MixGesture; reason: string }[];
 }
 
 // Below this, a beat-lock is more likely confidently WRONG than right (a
@@ -194,6 +203,7 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
   scheduleAfter(ctx, tEnd + 0.2, () => {
     from.eq.reset();
     from.setVolume(1);
+    from.delay.release();
   });
   glideRateToUnity(to, rate, tEnd);
 
@@ -326,6 +336,7 @@ function scheduleFilterMix(
     from.resetSweep();
     to.resetSweep();
     from.setVolume(1);
+    from.delay.release();
   });
   return { t0, durationSec, mixInTrackTime, mixOutTrackTime, rate: 1, fallback: false, style: 'filter', reason };
 }
@@ -372,6 +383,7 @@ export function scheduleGapMix(req: TransitionRequest): TransitionPlan {
   scheduleAfter(ctx, t0 + GAP_FADE_SEC + 0.2, () => {
     from.eq.reset();
     from.setVolume(1);
+    from.delay.release();
   });
   return {
     t0,
@@ -398,6 +410,7 @@ function scheduleFallback(req: TransitionRequest, earliest: number, reason: stri
   scheduleAfter(ctx, t0 + durationSec + 0.2, () => {
     from.eq.reset();
     from.setVolume(1);
+    from.delay.release();
   });
   return {
     t0,
@@ -426,6 +439,24 @@ function applyEqualPowerCross(outParam: AudioParam, inParam: AudioParam, t0: num
   inParam.setValueAtTime(0, t0 - 0.02);
   outParam.setValueCurveAtTime(fadeOut, t0, durationSec);
   inParam.setValueCurveAtTime(fadeIn, t0, durationSec);
+}
+
+/**
+ * Phase 3 Task 2: throw the OUTGOING deck's close into the beat-synced delay.
+ * The delay time is one beat of the outgoing grid at the deck's effective
+ * playback rate, so every repeat lands on the beat. The wet opens at the
+ * blend's start and dies at its end — inside the transition window, before
+ * the outgoing deck pauses. The incoming deck and the handover mechanics
+ * stay untouched; the nodes tear down in the existing scheduleAfter cleanup.
+ */
+function engageDelayGesture(
+  deck: Deck,
+  grid: NonNullable<ReturnType<typeof gridOf>>,
+  outRate: number,
+  plan: Pick<TransitionPlan, 't0' | 'durationSec'>,
+): void {
+  const beatSec = grid.beatSec / outRate;
+  deck.delay.engage(beatSec, plan.t0, plan.t0 + plan.durationSec);
 }
 
 /** Step the incoming deck's rate back to 1.0 in inaudible ~0.8% increments. */
@@ -571,10 +602,12 @@ export function scheduleWithStyleScorer(
   };
 
   // Score all candidates
-  const { style, score, rejectedStylesAndWhy, bars, bassSwapAllowed, vocalOverlapCapBars } = scoreStyles(scorerInput);
+  const { style, score, rejectedStylesAndWhy, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, gestureSeconds, rejectedGesturesAndWhy } = scoreStyles(scorerInput);
 
   // Convert rejected styles to telemetry format
   const rejections = rejectedStylesAndWhy.map((r) => ({ style: r.style as MixStyle, reason: r.reason }));
+  // Convert rejected gestures to telemetry format
+  const gestureRejections = rejectedGesturesAndWhy.map((r) => ({ gesture: r.gesture as MixGesture, reason: r.reason }));
 
   // Dispatch to the appropriate scheduler based on chosen style
   switch (style) {
@@ -591,31 +624,43 @@ export function scheduleWithStyleScorer(
       // Use the scored bars (4/8/16) instead of requestedBars
       const blendReq: TransitionRequest = { ...req, bars };
       const blendPlan = scheduleTransition(blendReq);
+      // Phase 3 Task 2: the chosen delay throws only from the outgoing deck
+      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, blendPlan);
       // Override bass swap if not allowed
       if (!bassSwapAllowed) {
         // The scheduler already handles short blends (<8 bars) with gentle swap
         // but if explicitly disallowed by LUFS gate, we'd need to adjust
         // For now, the scheduleTransition handles bars < 8 with SHORT_BLEND_KILL_DB
       }
-      return { ...blendPlan, style: 'blend', reason: null, rejectedStylesAndWhy: rejections };
+      return { ...blendPlan, style: 'blend', reason: null, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
 
     case 'filter':
       const filterReq: TransitionRequest = { ...req, bars: Math.min(requestedBars, FILTER_MAX_BARS) };
       const filterReason = toGrid
         ? `tempos ${Math.round(Math.abs(stretchRatio - 1) * 100)}% apart`
         : 'next song has no beat grid';
-      return { ...scheduleFilterMix(filterReq, earliest, fromGrid!, toGrid, filterReason), rejectedStylesAndWhy: rejections };
+      const filterPlan = scheduleFilterMix(filterReq, earliest, fromGrid!, toGrid, filterReason);
+      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, filterPlan);
+      return { ...filterPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
 
     case 'fade':
       // FADE = phrase-aligned blend at 6-8s (confidence-scaled)
       const fadeBars = Math.min(bars, 8); // cap at 8 bars for fade
       const fadeReq: TransitionRequest = { ...req, bars: fadeBars };
-      return { ...scheduleTransition(fadeReq), style: 'fade', rejectedStylesAndWhy: rejections };
+      const fadePlan = scheduleTransition(fadeReq);
+      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, fadePlan);
+      return { ...fadePlan, style: 'fade', rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
 
-    case 'gap':
-      return { ...scheduleGapMix(req), rejectedStylesAndWhy: rejections };
+    case 'gap': {
+      const gapPlan = scheduleGapMix(req);
+      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, gapPlan);
+      return { ...gapPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+    }
 
-    default:
-      return { ...scheduleFallback(req, earliest, 'unknown style from scorer'), rejectedStylesAndWhy: rejections };
+    default: {
+      const fallbackPlan = scheduleFallback(req, earliest, 'unknown style from scorer');
+      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, fallbackPlan);
+      return { ...fallbackPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+    }
   }
 }

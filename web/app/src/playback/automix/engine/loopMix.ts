@@ -18,6 +18,7 @@
  */
 import type { BeatSide, TrackAnalysis, VocalWindow } from '../analysis/types';
 import type { LoopChange, LoopDeck } from './loopDeck';
+import { DELAY_AIR_BEATS } from './policy';
 
 /** The longest loop, in each song's own bars; shorter ones are tried when no 4 clean bars exist. */
 export const LOOP_BARS = 4;
@@ -344,8 +345,11 @@ function rms(buffer: AudioBuffer, from: number, to: number, bufferOffsetSec = 0)
  * Schedules the whole mix on the two loop decks, from [t0] (the AudioContext
  * time the outgoing element reaches its loop start). Returns the times the
  * player needs: the handoff, and when and where the incoming element takes over.
+ * [gesture] is the scorer's chosen delay ({ delaySec } from scoreDelayGesture):
+ * the throw rides the outgoing deck's final beats and dies at the release,
+ * before the incoming element's handover — null keeps the wet silent.
  */
-export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: LoopDeck, t0: number, inGainComp = 1): LoopMixTimes {
+export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: LoopDeck, t0: number, inGainComp = 1, gesture: { delaySec: number } | null = null): LoopMixTimes {
   const { out, in: inn, fold } = plan;
   const beats = plan.totalBars * 4;
   const settleBeats = Math.round(SETTLE_BARS * 4 / fold);
@@ -424,6 +428,18 @@ export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: Lo
   const hp = outDeck.sweep.highpass.frequency;
   hp.setValueAtTime(20, rampEnd);
   hp.exponentialRampToValueAtTime(1500, releaseAt);
+
+  // Phase 3 Task 2: the delay throw, chosen by the scorer — never default.
+  // The delay time is the output beat period the beat clock just computed at
+  // the exit (the tempo has arrived, so it is constant), which is one beat of
+  // the outgoing grid at the deck's effective playback rate: the repeats land
+  // ON the grid. The wet opens at the last DELAY_AIR_BEATS beats — the air the
+  // scorer measured — and dies at the release, before the incoming element's
+  // handover inherits it. Bounded by the deck's own teardown either way.
+  if (gesture && beats > DELAY_AIR_BEATS) {
+    const beatPeriod = beatTimes[beats]! - beatTimes[beats - 1]!;
+    outDeck.delay.engage(beatPeriod, beatTimes[beats - DELAY_AIR_BEATS]!, releaseAt);
+  }
 
   return { t0, beatTimes, handoffAt: mid, releaseAt, elementAt, elementTrackTime };
 }

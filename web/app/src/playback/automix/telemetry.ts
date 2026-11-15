@@ -1,17 +1,26 @@
 // BitChord, Automix 2.0 Phase 0: every mix decision, recorded and readable.
 //
-// The later phases (analysis ladder, scoring) are decided against real pairs,
-// not intentions, so each planned transition is recorded — style, what was
-// rejected and why, the confidences the gates read — and a skip of the
-// incoming track within the skip window annotates the event it followed.
-// Local only: a localStorage ring of ~500 events, read back by the mix
-// report (shell/NerdStats.tsx). Nothing leaves the device.
+ // The later phases (analysis ladder, scoring) are decided against real pairs,
+ // not intentions, so each planned transition is recorded — style, what was
+ // rejected and why, the confidences the gates read — and a skip of the
+ // incoming track within the skip window annotates the event it followed.
+ // Local only: a localStorage ring of ~500 events, read back by the mix
+ // report (shell/NerdStats.tsx). Nothing leaves the device.
 
 export type MixStyle = 'loop' | 'blend' | 'filter' | 'crossfade' | 'gap' | 'fade';
+
+/** Phase 3: the FX gesture used for this transition, if any. */
+export type MixGesture = 'none' | 'delay' | 'reverb' | 'both';
 
 export interface RejectedStyle {
   style: MixStyle;
   /** The gate that killed the candidate, in the plan's own words. */
+  reason: string;
+}
+
+/** Phase 3: why a gesture was considered and rejected (mirrors RejectedStyle). */
+export interface RejectedGesture {
+  gesture: MixGesture;
   reason: string;
 }
 
@@ -49,9 +58,15 @@ export interface TransitionEvent {
   skipAfterSec: number | null;
   /** Wall-clock ms of the handoff; null when the mix aborted before it. */
   handedOffAt: number | null;
+  /** Phase 3: the FX gesture chosen for this transition. */
+  gesture: MixGesture;
+  /** Phase 3: total gesture seconds (delay + reverb). */
+  gestureSeconds: number;
+  /** Phase 3: gestures considered and rejected, with reasons. */
+  rejectedGesturesAndWhy: RejectedGesture[];
 }
 
-/** A user advance of the incoming track counts only this long after the handoff. */
+ /** A user advance of the incoming track counts only this long after the handoff. */
 export const TRANSITION_SKIP_WINDOW_SEC = 30;
 
 const STORAGE_KEY = 'bitchord:automix-events';
@@ -132,11 +147,21 @@ export interface StyleStat {
   skipRate: number | null;
 }
 
+/** Phase 3: gesture statistics for the mix report. */
+export interface GestureStat {
+  gesture: MixGesture;
+  count: number;
+  /** Events with a skip / completed events of the gesture, or null with none completed. */
+  skipRate: number | null;
+}
+
 export interface ReportStats {
   /** All events in the span, completed and aborted. */
   total: number;
   completed: number;
   styles: StyleStat[];
+  /** Phase 3: gesture counts and skip rates. */
+  gestures: GestureStat[];
   /** The plan's degradation reasons, most common first. */
   topReasons: { reason: string; count: number }[];
   /** Share of events planned with both grids ready: the analysis race. */
@@ -160,6 +185,22 @@ export function aggregate(events: TransitionEvent[]): ReportStats {
       return { style, count: list.length, skipRate: done.length ? skipped / done.length : null };
     })
     .sort((a, b) => b.count - a.count);
+
+  // Phase 3: aggregate gestures
+  const byGesture = new Map<MixGesture, TransitionEvent[]>();
+  for (const e of events) {
+    const list = byGesture.get(e.gesture) ?? [];
+    list.push(e);
+    byGesture.set(e.gesture, list);
+  }
+  const gestures: GestureStat[] = [...byGesture.entries()]
+    .map(([gesture, list]) => {
+      const done = list.filter((e) => e.outcome === 'completed');
+      const skipped = done.filter((e) => e.skipAfterSec !== null).length;
+      return { gesture, count: list.length, skipRate: done.length ? skipped / done.length : null };
+    })
+    .sort((a, b) => b.count - a.count);
+
   const reasons = new Map<string, number>();
   for (const e of completed) {
     for (const reason of [e.reason, ...e.rejectedStylesAndWhy.map((r) => r.reason)]) {
@@ -172,6 +213,7 @@ export function aggregate(events: TransitionEvent[]): ReportStats {
     total: events.length,
     completed: completed.length,
     styles,
+    gestures,
     topReasons: [...reasons.entries()]
       .map(([reason, count]) => ({ reason, count }))
       .sort((a, b) => b.count - a.count)

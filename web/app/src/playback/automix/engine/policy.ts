@@ -436,7 +436,7 @@ function evaluateCandidate(input: StyleScorerInput, candidate: MixStyleCandidate
  *
  * Pure function: no state, no clock, no randomness.
  *
- * @returns { style, score, killReason, bars, bassSwapAllowed, vocalOverlapCapBars }
+ * @returns { style, score, killReason, bars, bassSwapAllowed, vocalOverlapCapBars, gesture }
  */
 export function scoreStyles(input: StyleScorerInput): {
   /** The chosen style. */
@@ -451,7 +451,22 @@ export function scoreStyles(input: StyleScorerInput): {
   bassSwapAllowed: boolean;
   /** If vocal overlap > 0.15, the max bars for BLEND (4). */
   vocalOverlapCapBars: number | null;
+  /** Phase 3: the FX gesture chosen for this transition. */
+  gesture: 'none' | 'delay' | 'reverb' | 'both';
+  /** Phase 3: gesture seconds (delay + reverb), 0 for 'none'. */
+  gestureSeconds: number;
+  /** Phase 3: gestures considered and rejected, with reasons. */
+  rejectedGesturesAndWhy: { gesture: 'none' | 'delay' | 'reverb' | 'both'; reason: string }[];
 } {
+  // Phase 3 Task 2: the delay is a scorer decision with a recorded reason —
+  // no default path adds it. Reverb has no scorer yet (task 4); its absence
+  // stays implicit in the 'none'.
+  const delayDecision = scoreDelayGesture({ out: input.out, outGridConf: input.outGridConf });
+  const gesture: 'none' | 'delay' | 'reverb' | 'both' = delayDecision.chosen ? 'delay' : 'none';
+  const gestureSeconds = delayDecision.chosen ? delayDecision.delaySec ?? 0 : 0;
+  const rejectedGesturesAndWhy: { gesture: 'none' | 'delay' | 'reverb' | 'both'; reason: string }[] =
+    delayDecision.chosen ? [] : [{ gesture: 'delay', reason: delayDecision.killReason ?? 'unknown' }];
+
   const candidates: MixStyleCandidate[] = ['loop', 'blend', 'filter', 'fade', 'gap'];
   const results = candidates.map((c) => evaluateCandidate(input, c));
 
@@ -467,6 +482,9 @@ export function scoreStyles(input: StyleScorerInput): {
       bars: 8,
       bassSwapAllowed: false,
       vocalOverlapCapBars: null,
+      gesture,
+      gestureSeconds,
+      rejectedGesturesAndWhy,
     };
   }
 
@@ -504,6 +522,9 @@ export function scoreStyles(input: StyleScorerInput): {
     bars,
     bassSwapAllowed,
     vocalOverlapCapBars,
+    gesture,
+    gestureSeconds,
+    rejectedGesturesAndWhy,
   };
 }
 
@@ -592,4 +613,72 @@ function averageEnergy(
     idx++;
   }
   return count > 0 ? sum / count : null;
+}
+
+// ============================================================================
+// Phase 3 Task 2 — Beat-Synced Delay Gesture (the choice, never a default)
+// ============================================================================
+
+/**
+ * The delay throws the outgoing track's close into a beat-synced echo. It is
+ * a CHOSEN gesture, never default: it fits only a close with AIR — the last
+ * ~2 beats go quiet — on a trusted grid, so the repeats land ON the beat. A
+ * sustained melodic close (quiet all the way through the tail, no drop) is
+ * reverb territory (task 4), never a delay: nothing to throw, only something
+ * to bloom. Thresholds are relative to the tail view's own spread, as every
+ * gesture read here is.
+ */
+/** The phone's MIN_BEATMATCH scale: a rhythmic close needs a trusted grid. */
+export const DELAY_MIN_GRID_CONFIDENCE = 0.55;
+/** The join's air is measured over the outgoing track's last two beats. */
+export const DELAY_AIR_BEATS = 2;
+/** The last two beats sit at most this share of the tail's typical (p60) energy. */
+export const DELAY_AIR_MAX_SHARE = 0.35;
+
+export interface DelayGestureDecision {
+  chosen: boolean;
+  /** One beat of the outgoing grid, in track seconds; the deck applies its effective rate. */
+  delaySec: number | null;
+  /** The gate that killed the candidate, or null when chosen. */
+  killReason: string | null;
+}
+
+/**
+ * The delay gesture's gates, as a pure function over the outgoing analysis.
+ * Every rejection carries its killReason for the event telemetry; nothing is
+ * filtered, only recorded.
+ */
+export function scoreDelayGesture(input: { out: TrackAnalysis; outGridConf: number }): DelayGestureDecision {
+  const out = input.out;
+  const no = (reason: string): DelayGestureDecision => ({ chosen: false, delaySec: null, killReason: reason });
+  if (out.beatIntervalSec === null || !Number.isFinite(out.beatIntervalSec) || out.beatIntervalSec <= 0) {
+    return no('no outgoing beat grid for a rhythmic delay');
+  }
+  if (input.outGridConf < DELAY_MIN_GRID_CONFIDENCE) {
+    return no(`outgoing grid confidence ${input.outGridConf.toFixed(2)} < ${DELAY_MIN_GRID_CONFIDENCE}`);
+  }
+  const beatSec = out.beatIntervalSec;
+  const tail = tailView(out, GAP_TAIL_SEC) ?? wholeView(out);
+  if (!tail || !tail.curve.length) return no('no energy evidence at the outgoing close');
+  const typical = percentile(tail.curve, 0.6);
+  if (typical <= 0) return no('no energy evidence at the outgoing close');
+  const duration = Math.min(out.durationSec, tail.endSec);
+  const airWindow = DELAY_AIR_BEATS * beatSec;
+  const meanOver = (fromSec: number, toSec: number): number | null => {
+    const firstIdx = Math.max(0, Math.ceil((fromSec - tail.startSec) / tail.windowSec));
+    const lastIdx = Math.min(tail.curve.length, Math.floor((toSec - tail.startSec) / tail.windowSec));
+    if (lastIdx <= firstIdx) return null;
+    let sum = 0;
+    for (let i = firstIdx; i < lastIdx; i++) sum += tail.curve[i]!;
+    return sum / (lastIdx - firstIdx);
+  };
+  const air = meanOver(duration - airWindow, duration);
+  if (air === null) return no('no energy evidence at the outgoing close');
+  if (air > typical * DELAY_AIR_MAX_SHARE) return no('no air in the outgoing close');
+  // air with no content before it is not a drop — it is a sustained close
+  const before = meanOver(duration - airWindow * 2, duration - airWindow);
+  if (before === null || before <= typical * DELAY_AIR_MAX_SHARE) {
+    return no('sustained melodic close — reverb territory, not delay');
+  }
+  return { chosen: true, delaySec: beatSec, killReason: null };
 }
