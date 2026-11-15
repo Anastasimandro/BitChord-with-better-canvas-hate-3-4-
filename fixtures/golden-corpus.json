@@ -831,7 +831,7 @@
                       "expected":  {
                                        "style":  "crossfade",
                                        "entryBeatB":  1,
-                                       "overlapBars":  6,
+                                       "overlapBars":  12,
                                        "bassSwapBeat":  null,
                                        "gesture":  "none",
                                        "reason":  "this song has no beat grid at its end"
@@ -863,7 +863,7 @@
                       "expected":  {
                                        "style":  "crossfade",
                                        "entryBeatB":  1,
-                                       "overlapBars":  6,
+                                       "overlapBars":  12,
                                        "bassSwapBeat":  null,
                                        "gesture":  "none",
                                        "reason":  "this song has no beat grid at its end"
@@ -895,7 +895,7 @@
                       "expected":  {
                                        "style":  "crossfade",
                                        "entryBeatB":  1,
-                                       "overlapBars":  6,
+                                       "overlapBars":  12,
                                        "bassSwapBeat":  null,
                                        "gesture":  "none",
                                        "reason":  "this song has no beat grid at its end"
