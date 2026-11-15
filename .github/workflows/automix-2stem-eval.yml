@@ -1,0 +1,164 @@
+name: Automix 2-Stem Model Evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/stem-eval/**'
+      - '.github/workflows/automix-2stem-eval.yml'
+      - 'fixtures/golden-corpus.json'
+  pull_request:
+    paths:
+      - '.github/scripts/stem-eval/**'
+      - '.github/workflows/automix-2stem-eval.yml'
+      - 'fixtures/golden-corpus.json'
+
+permissions:
+  contents: read
+
+jobs:
+  stem-eval:
+    name: 2-Stem Model Evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: .github/scripts/stem-eval
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: .github/scripts/stem-eval/requirements.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsndfile1
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create cache directory
+        run: mkdir -p .cache/models eval_artifacts
+
+      - name: Run stem evaluation
+        id: eval
+        run: |
+          python eval_stems.py \
+            --cache-dir .cache/models \
+            --output-dir eval_artifacts \
+            --device cpu \
+            --models ht-demucs-ft mel-band-roformer open-unmix \
+            --corpus ../../fixtures/golden-corpus.json
+
+      - name: Upload metrics JSON artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stem-eval-metrics
+          path: |
+            .github/scripts/stem-eval/eval_artifacts/metrics.json
+          retention-days: 30
+
+      - name: Upload audio artifacts (before/after samples)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stem-eval-audio
+          path: |
+            .github/scripts/stem-eval/eval_artifacts/eval_outputs/
+          retention-days: 30
+
+      - name: Upload recommendation doc
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stem-eval-recommendation
+          path: |
+            docs/automix-2stem-eval.md
+          retention-days: 30
+
+      - name: Check evaluation result
+        if: always()
+        run: |
+          if [ -f .github/scripts/stem-eval/eval_artifacts/metrics.json ]; then
+            echo "Metrics JSON found"
+            cat .github/scripts/stem-eval/eval_artifacts/metrics.json | jq '.models[] | {model: .model_name, passes: .passes_budget, sdr: .vocals_sdr_db, latency: .avg_latency_sec}'
+          else
+            echo "ERROR: Metrics JSON not found"
+            exit 1
+          fi
+
+      - name: Verify recommendation doc exists
+        run: |
+          if [ -f docs/automix-2stem-eval.md ]; then
+            echo "Recommendation doc found"
+            head -50 docs/automix-2stem-eval.md
+          else
+            echo "ERROR: Recommendation doc not found"
+            exit 1
+          fi
+
+  # Run existing tests to ensure no regression
+  regression-tests:
+    name: Regression Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: stem-eval
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: web
+
+      - name: Run web tests
+        run: pnpm exec vitest run
+        working-directory: web/app
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run Android/JVM tests
+        run: ./gradlew :shared:jvmTest --no-daemon
+
+      - name: Run golden corpus tests (web)
+        run: pnpm exec vitest run golden-corpus.test.ts
+        working-directory: web/app
+
+      - name: Run golden corpus tests (Android)
+        run: ./gradlew :shared:jvmTest --tests "com.music.bitchord.playback.smart.GoldenCorpusTest" --no-daemon
