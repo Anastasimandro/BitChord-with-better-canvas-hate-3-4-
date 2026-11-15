@@ -73,6 +73,5 @@ android {
 tasks.withType<org.gradle.api.tasks.testing.Test> {
     testLogging {
         showStandardStreams = true
-        exceptionFormat = org.gradle.api.tasks.testing.TestExceptionFormat.FULL
     }
 }
