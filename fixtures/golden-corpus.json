@@ -1292,12 +1292,12 @@
                                      "durationSec":  240
                                  },
                       "expected":  {
-                                       "style":  "blend",
+                                       "style":  "filter",
                                        "entryBeatB":  1,
                                        "overlapBars":  8,
-                                       "bassSwapBeat":  4,
+                                       "bassSwapBeat":  null,
                                        "gesture":  "none",
-                                       "reason":  "tempos 30% apart"
+                                       "reason":  "tempos 40% apart"
                                    }
                   },
                   {
