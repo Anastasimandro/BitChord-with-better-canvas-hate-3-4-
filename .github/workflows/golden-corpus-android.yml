@@ -42,7 +42,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run golden corpus tests (JVM)
-        run: ./gradlew :shared:test --tests "com.music.bitchord.playback.smart.GoldenCorpusTest" --no-daemon
+        # commonTest rides each JVM target; jvmTest is the one that takes --tests.
+        run: ./gradlew :shared:jvmTest --tests "com.music.bitchord.playback.smart.GoldenCorpusTest" --no-daemon
 
       - name: Upload test results
         if: always()
