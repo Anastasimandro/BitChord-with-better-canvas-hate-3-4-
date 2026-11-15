@@ -22,9 +22,6 @@ jobs:
     name: 2-Stem Model Evaluation
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: .github/scripts/stem-eval
 
     steps:
       - name: Checkout repository
@@ -45,22 +42,25 @@ jobs:
           sudo apt-get install -y ffmpeg libsndfile1
 
       - name: Install Python dependencies
+        working-directory: .github/scripts/stem-eval
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Create cache directory
+        working-directory: .github/scripts/stem-eval
         run: mkdir -p .cache/models eval_artifacts
 
       - name: Run stem evaluation
         id: eval
+        working-directory: .github/scripts/stem-eval
         run: |
           python eval_stems.py \
             --cache-dir .cache/models \
             --output-dir eval_artifacts \
             --device cpu \
             --models ht-demucs-ft mel-band-roformer open-unmix \
-            --corpus ../../fixtures/golden-corpus.json
+            --corpus ${{ github.workspace }}/fixtures/golden-corpus.json
 
       - name: Upload metrics JSON artifact
         if: always()
@@ -91,10 +91,11 @@ jobs:
 
       - name: Check evaluation result
         if: always()
+        working-directory: .github/scripts/stem-eval
         run: |
-          if [ -f .github/scripts/stem-eval/eval_artifacts/metrics.json ]; then
+          if [ -f eval_artifacts/metrics.json ]; then
             echo "Metrics JSON found"
-            cat .github/scripts/stem-eval/eval_artifacts/metrics.json | jq '.models[] | {model: .model_name, passes: .passes_budget, sdr: .vocals_sdr_db, latency: .avg_latency_sec}'
+            cat eval_artifacts/metrics.json | jq '.models[] | {model: .model_name, passes: .passes_budget, sdr: .vocals_sdr_db, latency: .avg_latency_sec}'
           else
             echo "ERROR: Metrics JSON not found"
             exit 1
@@ -102,9 +103,9 @@ jobs:
 
       - name: Verify recommendation doc exists
         run: |
-          if [ -f docs/automix-2stem-eval.md ]; then
+          if [ -f ${{ github.workspace }}/docs/automix-2stem-eval.md ]; then
             echo "Recommendation doc found"
-            head -50 docs/automix-2stem-eval.md
+            head -50 ${{ github.workspace }}/docs/automix-2stem-eval.md
           else
             echo "ERROR: Recommendation doc not found"
             exit 1
