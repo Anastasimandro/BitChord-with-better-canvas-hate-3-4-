@@ -60,7 +60,8 @@ jobs:
             --output-dir eval_artifacts \
             --device cpu \
             --models ht-demucs-ft mel-band-roformer open-unmix \
-            --corpus ${{ github.workspace }}/fixtures/golden-corpus.json
+            --corpus ${{ github.workspace }}/fixtures/golden-corpus.json \
+            --workspace ${{ github.workspace }}
 
       - name: Upload metrics JSON artifact
         if: always()
