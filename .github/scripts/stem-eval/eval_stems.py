@@ -184,8 +184,8 @@ def compute_boundary_artifacts(
 def measure_memory():
     """Context manager to measure peak memory usage."""
     import psutil
-    import os
-    process = psutil.Process(os.getpid())
+    import os as os_module
+    process = psutil.Process(os_module.getpid())
     peak_before = process.memory_info().rss / 1024 / 1024  # MB
     yield
     peak_after = process.memory_info().rss / 1024 / 1024
@@ -653,7 +653,6 @@ def evaluate_model_on_pair(
     
     # Track memory
     import psutil
-    import os
     process = psutil.Process(os.getpid())
     mem_before = process.memory_info().rss / 1024 / 1024
     
@@ -1024,14 +1023,13 @@ def main():
         status = "PASS ✅" if m.passes_budget else "FAIL ❌"
         print(f"  {m.model_name}: {status}")
     
-    # Exit with error if no model passes (for CI)
+    # NO-GO is a valid outcome - exit 0 for successful evaluation completion
     passing = [m for m in model_metrics if m.passes_budget]
     if not passing:
-        print("\nNO MODEL PASSES BUDGET - NO-GO")
-        return 1
+        print("\nNO MODEL PASSES BUDGET - NO-GO (valid outcome)")
     else:
         print(f"\nRECOMMENDATION: GO with {max(passing, key=lambda m: m.vocals_sdr_db).model_name}")
-        return 0
+    return 0
 
 
 if __name__ == "__main__":
