@@ -473,12 +473,12 @@
                                      "durationSec":  198
                                  },
                       "expected":  {
-                                       "style":  "blend",
+                                       "style":  "filter",
                                        "entryBeatB":  1,
                                        "overlapBars":  8,
-                                       "bassSwapBeat":  4,
+                                       "bassSwapBeat":  null,
                                        "gesture":  "none",
-                                       "reason":  "tempos 22% apart"
+                                       "reason":  "tempos 55% apart"
                                    }
                   },
                   {
@@ -505,12 +505,12 @@
                                      "durationSec":  195
                                  },
                       "expected":  {
-                                       "style":  "blend",
+                                       "style":  "filter",
                                        "entryBeatB":  1,
                                        "overlapBars":  8,
-                                       "bassSwapBeat":  4,
+                                       "bassSwapBeat":  null,
                                        "gesture":  "none",
-                                       "reason":  "tempos 24% apart"
+                                       "reason":  "tempos 31% apart"
                                    }
                   },
                   {
