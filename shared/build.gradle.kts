@@ -68,3 +68,11 @@ android {
     namespace = "com.music.bitchord.shared"
     compileSdk = 36
 }
+
+// Show test stdout/stderr in CI so the corpus test's diff prints are visible.
+tasks.withType<org.gradle.api.tasks.testing.Test> {
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.TestExceptionFormat.FULL
+    }
+}
