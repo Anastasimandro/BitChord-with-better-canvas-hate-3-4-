@@ -75,12 +75,16 @@ class GoldenCorpusTest {
     @Test
     fun goldenCorpusTest() {
         // The fixture lives at the repo root; resolve it from the module dir
-        // the JVM test runs in, walking up so the test works anywhere.
-        var fixturePath = File("fixtures/golden-corpus.json")
-        for (walk in 1..4) {
+        // the JVM test runs in by walking the directory chain upward — the
+        // walk is on directories, because re-deriving from the file each hop
+        // lands on the same shared/fixtures path forever.
+        var dir = File("").canonicalFile
+        var fixturePath = File(dir, "fixtures/golden-corpus.json")
+        for (walk in 1..6) {
             if (fixturePath.exists()) break
-            val parent = fixturePath.canonicalFile.parentFile.parentFile ?: break
-            fixturePath = File(parent, "fixtures/golden-corpus.json")
+            val parent = dir.parentFile ?: break
+            dir = parent
+            fixturePath = File(dir, "fixtures/golden-corpus.json")
         }
         fixturePath = fixturePath.canonicalFile
         println("FIXTURE PATH: ${fixturePath.absolutePath}, exists: ${fixturePath.exists()}")
