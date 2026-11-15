@@ -1612,10 +1612,10 @@
                                      "durationSec":  200
                                  },
                       "expected":  {
-                                       "style":  "blend",
+                                       "style":  "filter",
                                        "entryBeatB":  1,
-                                       "overlapBars":  4,
-                                       "bassSwapBeat":  2,
+                                       "overlapBars":  8,
+                                       "bassSwapBeat":  null,
                                        "gesture":  "none",
                                        "reason":  "next song has no beat grid"
                                    }
