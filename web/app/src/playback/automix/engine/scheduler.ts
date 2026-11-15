@@ -110,6 +110,9 @@ export class Scheduler {
       outcome: 'completed',
       skipAfterSec: null,
       handedOffAt: null,
+      gesture: 'none',
+      gestureSeconds: 0,
+      rejectedGesturesAndWhy: [],
     };
     recordTransition(driftEvent);
   }
