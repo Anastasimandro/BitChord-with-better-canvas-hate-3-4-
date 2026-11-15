@@ -254,6 +254,15 @@ data class TransitionPlan(
      * player's own (silenced) audio and dies with it.
      */
     val echoSeconds: Double = 0.0,
+    /**
+     * Phase 3: the FX gesture for this transition.
+     * 'none' | 'delay' | 'reverb' | 'both'. Default 'none' — real choice lands in tasks 2-4.
+     */
+    val gesture: String = "none",
+    /** Phase 3: total gesture seconds (delay + reverb). */
+    val gestureSeconds: Double = 0.0,
+    /** Why the policy considered and rejected a gesture (mirrors web). */
+    val rejectedGesturesAndWhy: List<Pair<String, String>> = emptyList(),
     /** Why the policy landed where it did, when it declined to be more ambitious. */
     val policyReasons: List<String> = emptyList(),
 ) {
@@ -1694,12 +1703,153 @@ private fun planTransitionInner(
 
     val nextLength = max(nextAnalysis.duration.orZero(), trackDurationSeconds(nextTrack))
 
-    // The gap mix outranks the blend on the ladder: a pair this evidence
-    // describes — one closing, one opening cleanly — does not want an overlap
-    // at all. Weak grids fell through to the plain crossfade above; this gate
-    // re-reads the confidences directly for the same reason [gapPlan] does.
-    gapPlan(analysis, nextAnalysis, finalMixAnchor, playbackTime, policy)
-        ?.let { return capIncomingSkip(it, nextAnalysis, nextLength) }
+    // Phase 2 Task 6: Style Scorer with Hard Gates — single decision point
+    val scorerInput = StyleScorerInput(
+        out = analysis,
+        outGridConf = analysis.beatConfidence.orZero(),
+        inGridConf = nextAnalysis.beatConfidence.orZero(),
+        vocalOverlap = if (analysis.vocalActivityMask.isNotEmpty() && nextAnalysis.vocalActivityMask.isNotEmpty()) {
+            simultaneousVocalFraction(
+                outgoing = analysis,
+                incoming = nextAnalysis,
+                outStart = mixAnchor - standardFade,
+                outEnd = mixAnchor,
+                inStart = incomingStartPoint(nextAnalysis),
+                rate = incomingRateBetween(analysis.bpm.orZero(), nextAnalysis.bpm.orZero()),
+            ) ?: 0.0
+        } else null,
+        stretchRatio = incomingRateBetween(analysis.bpm.orZero(), nextAnalysis.bpm.orZero()),
+        residualDeltaLufs = (analysis.lufsTail ?: analysis.lufs)?.let { out ->
+            (nextAnalysis.lufsHead ?: nextAnalysis.lufs)?.let { inn -> out - inn }
+        },
+        hasLoopPlan = false, // LOOP not implemented on Android yet
+        loopOutBars = 0,
+        loopInBars = 0,
+        loopFold = 1.0,
+        energyContinuity = 0.5, // placeholder — would need energy curves
+        outLowEnergyAtJoin = if (analysis.lowEnergyCurve.isNotEmpty()) {
+            averageEnergy(analysis.lowEnergyCurve, mixAnchor - 2.0, mixAnchor)?.let { avg ->
+                lowEnergyReference(analysis.lowEnergyCurve)?.let { ref -> avg / ref }
+            }
+        } else null,
+        inLowEnergyAtJoin = if (nextAnalysis.lowEnergyCurve.isNotEmpty()) {
+            averageEnergy(nextAnalysis.lowEnergyCurve, incomingStartPoint(nextAnalysis), incomingStartPoint(nextAnalysis) + 2.0)?.let { avg ->
+                lowEnergyReference(nextAnalysis.lowEnergyCurve)?.let { ref -> avg / ref }
+            }
+        } else null,
+    )
+
+    val scoreResult = scoreStyles(scorerInput)
+
+    // Phase 3: the scorer's gesture rides whichever plan the transition
+    // landed on — echoSeconds wakes here, the render side picks it up per deck.
+    fun gestured(plan: TransitionPlan): TransitionPlan = plan.copy(
+        echoSeconds = scoreResult.gestureSeconds,
+        gesture = scoreResult.gesture,
+        gestureSeconds = scoreResult.gestureSeconds,
+        rejectedGesturesAndWhy = scoreResult.rejectedGesturesAndWhy,
+    )
+
+    // Dispatch based on scorer result
+    return when (scoreResult.style) {
+        StyleCandidate.GAP -> {
+            gapPlan(analysis, nextAnalysis, finalMixAnchor, playbackTime, policy)
+                ?.let { return capIncomingSkip(gestured(it), nextAnalysis, nextLength) }
+            // GAP gate failed in scorer but passed here — fall through
+            gestured(standardTransition(length, playbackTime, standardFade, minFadeSeconds, "gap-scorer-mismatch"))
+        }
+        StyleCandidate.FADE -> {
+            // FADE = phrase-aligned blend at scored bars (4/8/16)
+            val fadeBars = scoreResult.bars
+            val beatSeconds = if (analysis.bpm.orZero() > 0) 60 / analysis.bpm else 0.0
+            val fadeSeconds = (fadeBars * 4 * beatSeconds).coerceAtLeast(minFadeSeconds).coerceAtMost(standardFade)
+            val transitionStart = max(0.0, mixAnchor - fadeSeconds)
+            val started = playbackTime >= transitionStart
+            gestured(
+                TransitionPlan(
+                    shouldStart = started,
+                    markerVisible = true,
+                    transitionStart = transitionStart,
+                    transitionEnd = mixAnchor,
+                    fadeSeconds = fadeSeconds,
+                    transitionStyle = TransitionStyle.DJ_BLEND,
+                    incomingCueTime = incomingStartPoint(nextAnalysis),
+                    incomingHandoffTime = incomingStartPoint(nextAnalysis),
+                    incomingPlaybackRate = 1.0,
+                    bassSwap = false,
+                    vocalOverlap = scoreResult.rejectedStylesAndWhy.associate { it.first to it.second }.getOrDefault(StyleCandidate.BLEND, "")?.toDoubleOrNull() ?: 0.0,
+                    policyReasons = policy.reasons + "fade-scorer",
+                    reason = if (started) "smart-fade" else "before-smart-fade",
+                ),
+            )
+        }
+        StyleCandidate.BLEND -> {
+            // Beat-matched blend with scored bars
+            val plan = mixPlan(
+                analysis = analysis,
+                nextAnalysis = nextAnalysis,
+                mixAnchor = mixAnchor,
+                mixOutType = mixOutAnchor.type,
+                nextLength = nextLength,
+                traits = if (advanced) PairTraits(analysis, nextAnalysis) else null,
+            )
+            if (plan.transitionStyle == TransitionStyle.DJ_BLEND) {
+                // Apply scored bars and bass swap gate
+                val bars = scoreResult.bars
+                val beatSeconds = if (analysis.bpm.orZero() > 0) 60 / analysis.bpm else 0.0
+                val newFadeSeconds = (bars * 4 * beatSeconds).coerceAtLeast(minFadeSeconds)
+                if (newFadeSeconds < plan.fadeSeconds) {
+                    val newTransitionStart = plan.transitionEnd - newFadeSeconds
+                    val started = playbackTime >= newTransitionStart
+                    return capIncomingSkip(
+                        gestured(
+                            plan.copy(
+                                shouldStart = started,
+                                transitionStart = newTransitionStart,
+                                fadeSeconds = newFadeSeconds,
+                                bassSwap = scoreResult.bassSwapAllowed,
+                                policyReasons = policy.reasons + "blend-scorer",
+                                reason = if (started) "smart-blend" else "before-smart-blend",
+                            ),
+                        ),
+                        nextAnalysis,
+                        nextLength,
+                    )
+                }
+            }
+            capIncomingSkip(gestured(plan), nextAnalysis, nextLength)
+        }
+        StyleCandidate.FILTER -> {
+            // Filter mix (DJ_FILTER)
+            val plan = mixPlan(
+                analysis = analysis,
+                nextAnalysis = nextAnalysis,
+                mixAnchor = mixAnchor,
+                mixOutType = mixOutAnchor.type,
+                nextLength = nextLength,
+                traits = if (advanced) PairTraits(analysis, nextAnalysis) else null,
+            )
+            if (plan.transitionStyle == TransitionStyle.DJ_FILTER) {
+                val started = playbackTime >= plan.transitionStart
+                return capIncomingSkip(
+                    gestured(
+                        plan.copy(
+                            shouldStart = started,
+                            policyReasons = policy.reasons + "filter-scorer",
+                            reason = if (started) "smart-filter" else "before-smart-filter",
+                        ),
+                    ),
+                    nextAnalysis,
+                    nextLength,
+                )
+            }
+            capIncomingSkip(gestured(plan), nextAnalysis, nextLength)
+        }
+        StyleCandidate.LOOP -> {
+            // Not implemented on Android yet
+            gestured(standardTransition(length, playbackTime, standardFade, minFadeSeconds, "loop-not-implemented"))
+        }
+    }
 
     // A pair no speed-up can match that also clashes in key or sings on both
     // sides has nothing a DJ gesture can fix: every one of them put two loud,

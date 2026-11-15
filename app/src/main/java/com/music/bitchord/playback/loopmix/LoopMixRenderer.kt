@@ -48,6 +48,13 @@ class LoopMixRenderer(val sampleRate: Int) : AutoCloseable {
     fun setEnvelope(index: Int, kind: Int, times: DoubleArray, values: FloatArray, exponential: Boolean = false) =
         nativeSetEnvelope(handle, index, kind, times, values, exponential)
 
+    /**
+     * Phase 3 Task 3: the delay gesture's unit on [index] — one beat of the
+     * outgoing grid at the deck's effective rate, in seconds. 0 leaves the
+     * unit off (no buffer, no cost). Call before [prepare].
+     */
+    fun setDelay(index: Int, delaySeconds: Double) = nativeSetDelay(handle, index, delaySeconds)
+
     fun prepare() = nativePrepare(handle)
 
     /** The earliest mix frame anything renders at; negative, before t0. */
@@ -75,6 +82,8 @@ class LoopMixRenderer(val sampleRate: Int) : AutoCloseable {
         const val KIND_GAIN = 0
         const val KIND_LOW_DB = 1
         const val KIND_HIGH_PASS_HZ = 2
+        /** Phase 3 Task 3: the delay gesture's wet envelope (added outside the deck's own gain). */
+        const val KIND_DELAY_WET = 3
 
         val available: Boolean = runCatching { System.loadLibrary("bitchord_loopmix") }
             .onFailure { Log.w("BitChordLoopMix", "Loop mix renderer unavailable", it) }
@@ -90,6 +99,7 @@ class LoopMixRenderer(val sampleRate: Int) : AutoCloseable {
         @JvmStatic private external fun nativeSetEnvelope(
             handle: Long, index: Int, kind: Int, times: DoubleArray, values: FloatArray, exponential: Boolean,
         )
+        @JvmStatic private external fun nativeSetDelay(handle: Long, index: Int, delaySeconds: Double)
         @JvmStatic private external fun nativePrepare(handle: Long)
         @JvmStatic private external fun nativeFirstFrame(handle: Long): Long
         @JvmStatic private external fun nativeRender(handle: Long, frame: Long, interleaved: FloatArray, offset: Int, frames: Int)

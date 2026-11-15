@@ -110,6 +110,14 @@ class LoopMixSession private constructor(
         private const val PREROLL_SECONDS = 1.0
         private const val TAIL_SECONDS = 3.0
 
+        // Phase 3 Task 3: the delay gesture's constants, identical to the web twin's.
+        /** The air is the outgoing track's last two beats. */
+        const val DELAY_AIR_BEATS = 2
+        /** Ceiling on the delay time: covers every beat down to 30 BPM; a longer, corrupt beat is a refused order. */
+        const val DELAY_MAX_SEC = 2.0
+        /** The wet gain's ramp at both edges of the engagement window. */
+        const val DELAY_WET_RAMP_SEC = 0.01
+
         /**
          * Builds the renderer for [plan] at [sampleRate], decoding the two
          * regions through [decode] (track seconds from..to, resampled to
@@ -122,6 +130,8 @@ class LoopMixSession private constructor(
             inId: String,
             sampleRate: Int,
             inLevel: Float,
+            /** Phase 3 Task 3: the scorer's delay seconds for this transition; 0 leaves the unit off. */
+            echoSeconds: Double = 0.0,
             decode: (side: LoopMix.Side, from: Double, to: Double) -> LoopRegion?,
         ): LoopMixSession? {
             if (!LoopMixRenderer.available || sampleRate <= 0) return null
@@ -220,6 +230,32 @@ class LoopMixSession private constructor(
                 floatArrayOf(LoopMix.HIGH_PASS_FROM_HZ.toFloat(), LoopMix.HIGH_PASS_TO_HZ.toFloat()),
                 exponential = true,
             )
+            // Phase 3 Task 3: the delay throw, chosen by the scorer — never a
+            // default. Same contract as the web twin's scheduleLoopMix: the
+            // delay time is the output beat period the beat clock computed at
+            // the exit (the tempo has arrived, so it is constant), which is one
+            // beat of the outgoing grid at the deck's effective rate; the wet
+            // opens at the last DELAY_AIR_BEATS beats — the air the scorer
+            // measured — and dies at the release, before the incoming
+            // element's handover inherits it. echoSeconds 0 never reaches here:
+            // the unit stays off and costs nothing.
+            if (echoSeconds > 0 && beats > DELAY_AIR_BEATS) {
+                val beatPeriod = clock.beatTimes[beats] - clock.beatTimes[beats - 1]
+                if (beatPeriod.isFinite() && beatPeriod > 0 && beatPeriod <= DELAY_MAX_SEC) {
+                    val openAt = clock.beatTimes[beats - DELAY_AIR_BEATS]
+                    renderer.setDelay(LoopMixRenderer.OUT, beatPeriod)
+                    renderer.setEnvelope(
+                        LoopMixRenderer.OUT, LoopMixRenderer.KIND_DELAY_WET,
+                        doubleArrayOf(
+                            openAt,
+                            openAt + DELAY_WET_RAMP_SEC,
+                            clock.releaseAt - DELAY_WET_RAMP_SEC,
+                            clock.releaseAt,
+                        ),
+                        floatArrayOf(0f, 1f, 1f, 0f),
+                    )
+                }
+            }
             renderer.prepare()
             // The incoming deck hands over to its own player at the same track position.
             renderer.setFadeOut(LoopMixRenderer.IN, clock.elementTrackTime)

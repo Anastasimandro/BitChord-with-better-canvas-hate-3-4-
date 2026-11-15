@@ -71,7 +71,10 @@ Java_com_music_bitchord_playback_loopmix_LoopMixRenderer_nativeSetEnvelope(
     jboolean exponential) {
   Deck* deck = DeckOf(handle, index);
   if (deck == nullptr) return;
-  Envelope* envelope = kind == 0 ? &deck->gain : kind == 1 ? &deck->lowDb : kind == 2 ? &deck->highPassHz : nullptr;
+  Envelope* envelope = kind == 0 ? &deck->gain : kind == 1 ? &deck->lowDb
+                     : kind == 2 ? &deck->highPassHz
+                     : kind == 3 ? &deck->delayWet
+                                 : nullptr;
   if (envelope == nullptr) return;
   const jsize points = std::min(env->GetArrayLength(times), env->GetArrayLength(values));
   envelope->times.resize(points);
@@ -79,6 +82,16 @@ Java_com_music_bitchord_playback_loopmix_LoopMixRenderer_nativeSetEnvelope(
   env->GetDoubleArrayRegion(times, 0, points, envelope->times.data());
   env->GetFloatArrayRegion(values, 0, points, envelope->values.data());
   envelope->exponential = exponential;
+}
+
+JNIEXPORT void JNICALL
+Java_com_music_bitchord_playback_loopmix_LoopMixRenderer_nativeSetDelay(
+    JNIEnv*, jclass, jlong handle, jint index, jdouble delaySeconds) {
+  Deck* deck = DeckOf(handle, index);
+  if (deck == nullptr) return;
+  // The buffer itself is assigned in prepare(); a corrupt beat here is
+  // refused there (the unit stays off), never guessed at.
+  deck->delaySeconds = delaySeconds > 0 && delaySeconds <= 2.0 ? delaySeconds : 0.0;
 }
 
 JNIEXPORT void JNICALL

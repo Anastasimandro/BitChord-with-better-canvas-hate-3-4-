@@ -36,6 +36,12 @@ object MixTelemetry {
     const val STYLE_CROSSFADE = "crossfade"
     const val STYLE_GAP = "gap"
 
+    /** Phase 3: FX gestures as the report prints them; mirrors the web client. */
+    const val GESTURE_NONE = "none"
+    const val GESTURE_DELAY = "delay"
+    const val GESTURE_REVERB = "reverb"
+    const val GESTURE_BOTH = "both"
+
     const val OUTCOME_COMPLETED = "completed"
     const val OUTCOME_ABORTED = "aborted"
     const val OUTCOME_IN_FLIGHT = "in-flight"
@@ -57,6 +63,13 @@ object MixTelemetry {
     data class RejectedStyle(
         val style: String,
         /** The gate that killed the candidate, in the plan's own words. */
+        val reason: String,
+    )
+
+    /** Phase 3: why a gesture was considered and rejected (mirrors RejectedStyle). */
+    @Serializable
+    data class RejectedGesture(
+        val gesture: String,
         val reason: String,
     )
 
@@ -99,6 +112,12 @@ object MixTelemetry {
         var skipAfterSec: Double? = null,
         /** Wall-clock ms of the handoff; null when the mix aborted before it. */
         var handedOffAt: Long? = null,
+        /** Phase 3: the FX gesture chosen for this transition. */
+        val gesture: String = GESTURE_NONE,
+        /** Phase 3: total gesture seconds (delay + reverb). */
+        val gestureSeconds: Double = 0.0,
+        /** Phase 3: gestures considered and rejected, with reasons. */
+        val rejectedGesturesAndWhy: List<RejectedGesture> = emptyList(),
     )
 
     private val json = Json {
@@ -254,11 +273,21 @@ object MixTelemetry {
         val skipRate: Double?,
     )
 
+    /** Phase 3: gesture statistics for the mix report. */
+    data class GestureStat(
+        val gesture: String,
+        val count: Int,
+        /** Events with a skip / completed events of the gesture, or null with none completed. */
+        val skipRate: Double?,
+    )
+
     data class ReportStats(
         /** All events in the span, completed and aborted. */
         val total: Int,
         val completed: Int,
         val styles: List<StyleStat>,
+        /** Phase 3: gesture counts and skip rates. */
+        val gestures: List<GestureStat>,
         /** The plan's degradation reasons, most common first. */
         val topReasons: List<Pair<String, Int>>,
         /** Share of events planned with both grids ready: the analysis race. */
@@ -284,6 +313,17 @@ object MixTelemetry {
                 StyleStat(style, list.size, if (done.isNotEmpty()) skipped.toDouble() / done.size else null)
             }
             .sortedByDescending { it.count }
+
+        // Phase 3: aggregate gestures
+        val byGesture = all.groupBy { it.gesture }
+        val gestures = byGesture.entries
+            .map { (gesture, list) ->
+                val done = list.filter { it.outcome == OUTCOME_COMPLETED }
+                val skipped = done.count { it.skipAfterSec != null }
+                GestureStat(gesture, list.size, if (done.isNotEmpty()) skipped.toDouble() / done.size else null)
+            }
+            .sortedByDescending { it.count }
+
         val reasons = LinkedHashMap<String, Int>()
         for (event in completed) {
             for (reason in listOfNotNull(event.reason) + event.rejectedStylesAndWhy.map { it.reason }) {
@@ -300,6 +340,7 @@ object MixTelemetry {
             total = all.size,
             completed = completed.size,
             styles = styles,
+            gestures = gestures,
             topReasons = reasons.entries.sortedByDescending { it.value }.take(5).map { it.key to it.value },
             hitRate = if (all.isNotEmpty()) ready.toDouble() / all.size else 0.0,
             plannedBy60Share = if (completed.isNotEmpty()) plannedEarly.toDouble() / completed.size else 0.0,

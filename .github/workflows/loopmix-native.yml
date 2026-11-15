@@ -1,0 +1,50 @@
+name: Loop Mix Native
+
+# The C++ renderer's own CI lane: it compiles for the host with the same flags
+# the Android build uses, and its delay gesture is exercised — repeats on the
+# beat grid, the decay, no wet past the window — and timed. Nothing here is
+# ever built or run on a dev machine (see context.md's build rule).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/loopmix/**'
+      - 'app/src/main/cpp/jni/loopmix_jni.cpp'
+      - '.github/workflows/loopmix-native.yml'
+  pull_request:
+    paths:
+      - 'native/loopmix/**'
+      - 'app/src/main/cpp/jni/loopmix_jni.cpp'
+      - '.github/workflows/loopmix-native.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  delay-test:
+    name: Renderer delay test + performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build the host harness
+        run: |
+          g++ -std=c++17 -O3 -ffast-math -Wall -Wextra \
+            native/loopmix/loop_mix_renderer.cpp \
+            native/loopmix/tests/loop_mix_delay_test.cpp \
+            -I native -I native/third_party \
+            -o loop_mix_delay_test
+
+      - name: Run the delay test
+        run: ./loop_mix_delay_test | tee loop_mix_delay_test.log
+
+      - name: Upload the test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loop-mix-delay-test-log
+          path: loop_mix_delay_test.log
+          retention-days: 7

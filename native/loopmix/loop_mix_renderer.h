@@ -40,6 +40,7 @@ struct Biquad {
 
   void lowShelf(double sampleRate, double frequency, double gainDb);
   void highPass(double sampleRate, double frequency, double q);
+  void lowPass(double sampleRate, double frequency, double q);
   void bypass() { b0 = 1; b1 = b2 = a1 = a2 = 0; }
   inline float tick(int channel, float x) {
     const float y = b0 * x + z1[channel];
@@ -93,6 +94,23 @@ struct Deck {
   Biquad highPass;
   float shelfDb = 0;
   float highPassFreq = 0;
+
+  // Phase 3 Task 3: the delay gesture's render unit, one per deck. The dry
+  // path never passes through it: the deck's post-filter signal is tapped
+  // into a circular buffer whose feedback loop runs through a low-pass, and
+  // the delayed output is added with its own wet envelope. Same graph as the
+  // web twin's DeckDelay (loopDeck.ts). [delaySeconds] is one beat of the
+  // outgoing grid at the deck's effective rate, passed in per plan; 0 means
+  // the unit is absent and costs nothing (no buffer, no branches on the
+  // render path that matter). The buffer is allocated in [Renderer::prepare],
+  // never in render.
+  double delaySeconds = 0;
+  Biquad delayLowPass;
+  Envelope delayWet;
+  std::vector<float> delayLeft;
+  std::vector<float> delayRight;
+  int delaySize = 0;   // frames in the circular buffer; 0 = the unit is off
+  int delayPos = 0;    // next write position (== oldest sample)
 
   /** Track seconds an unwrapped position plays (continuous; the loop and its release applied). */
   double trackSecondsAt(double unwrapped, double sampleRate) const;

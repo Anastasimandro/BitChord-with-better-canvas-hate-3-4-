@@ -459,6 +459,8 @@ class CrossfadeController(
         lockPhase: Boolean = false,
         /** The plan's echo time; 0 for no echo out. */
         echoSeconds: Double = 0.0,
+        /** LUFS gain compensation for the incoming deck: 10^((lufsOut - lufsIn) / 20), clamped to ±6 dB. 1.0 when unavailable. */
+        val lufsCompensation: Float = 1f,
     ) {
         private val grid = if (advanced && beats >= 2.0) beats else 0.0
         val clash = vocalOverlap.coerceIn(0.0, 1.0)
@@ -1185,7 +1187,7 @@ class CrossfadeController(
             plannedTransition = currentItem.mediaId to loopStartMs
             holdAhead(player, duration)
             if (loopStartMs - player.currentPosition > LOOP_ARM_LEAD_MS) return
-            beginLoop(player, loop, currentItem, nextItem, duration, nextDuration)
+            beginLoop(player, loop, currentItem, nextItem, duration, nextDuration, plan.echoSeconds)
             return
         }
 
@@ -1296,12 +1298,12 @@ class CrossfadeController(
             playbackRate = plan.incomingPlaybackRate,
             outgoingRate = plan.outgoingPlaybackRate,
             beatMs = beatMs,
-            renderStyle = renderFor(plan, advanced),
+            renderStyle = renderFor(plan, advanced, currentAnalysis, nextAnalysis),
             plan = plan,
         )
     }
 
-    private fun renderFor(plan: TransitionPlan, advanced: Boolean) = Render(
+    private fun renderFor(plan: TransitionPlan, advanced: Boolean, outAnalysis: TrackAnalysis, inAnalysis: TrackAnalysis) = Render(
         style = plan.transitionStyle,
         bassSwap = plan.bassSwap,
         bassSwapFraction = plan.bassSwapFraction,
@@ -1312,7 +1314,19 @@ class CrossfadeController(
         beats = if (plan.beatSeconds > 0) plan.fadeSeconds / plan.beatSeconds else 0.0,
         lockPhase = plan.phaseLock,
         echoSeconds = plan.echoSeconds,
+        lufsCompensation = computeLufsCompensation(outAnalysis, inAnalysis),
     )
+
+    /** LUFS gain compensation for the incoming deck: lufsOut(tail) - lufsIn(head), capped at ±6 dB. */
+    private fun computeLufsCompensation(outAnalysis: TrackAnalysis, inAnalysis: TrackAnalysis): Float {
+        val outLufs = outAnalysis.lufsTail ?: outAnalysis.lufs
+        val inLufs = inAnalysis.lufsHead ?: inAnalysis.lufs
+        return if (outLufs != null && inLufs != null) {
+            10.0.pow((outLufs - inLufs) / 20.0).coerceIn(10.0.pow(-0.3), 10.0.pow(0.3)).toFloat()
+        } else {
+            1f
+        }
+    }
 
     /**
      * Queues the playing track and the one queued after it for analysis.
@@ -1762,10 +1776,17 @@ class CrossfadeController(
             null
         }
         val deltaLufs = if (outAnalysis.lufs != null && inAnalysis.lufs != null) {
-            inAnalysis.lufs!! - outAnalysis.lufs!!
+            // RAW delta (pre-compensation): outgoing tail - incoming head
+            val outLufs = outAnalysis.lufsTail ?: outAnalysis.lufs
+            val inLufs = inAnalysis.lufsHead ?: inAnalysis.lufs
+            if (outLufs != null && inLufs != null) outLufs - inLufs else null
         } else {
             null
         }
+        // Phase 3: gesture fields (stub defaults)
+        val gesture = plan?.gesture ?: MixTelemetry.GESTURE_NONE
+        val gestureSeconds = plan?.gestureSeconds ?: 0.0
+        val rejectedGestures = plan?.rejectedGesturesAndWhy?.map { (g, r) -> MixTelemetry.RejectedGesture(g, r) } ?: emptyList()
         val event = MixTelemetry.TransitionEvent(
             at = System.currentTimeMillis(),
             pair = "${outItem.mediaId}>${inItem.mediaId}",
@@ -1782,6 +1803,9 @@ class CrossfadeController(
             bothGridsReady = outAnalysis.isUsable && inAnalysis.isUsable &&
                 outAnalysis.tailBeats != null && inAnalysis.headBeats != null,
             plannedRemainingSec = plannedRemainingSec,
+            gesture = gesture,
+            gestureSeconds = gestureSeconds,
+            rejectedGesturesAndWhy = rejectedGestures,
         )
         MixTelemetry.record(event)
         TrackLog.i(
@@ -2275,7 +2299,7 @@ class CrossfadeController(
         // ride them with. Swapped in and straight back out on this thread:
         // [render] is only read by the blend, and no blend is running while
         // there is a plan to preview.
-        val planned = renderFor(plan, advanced)
+        val planned = renderFor(plan, advanced, currentAnalysis, nextAnalysis)
         val running = render
         render = planned
         val samples = MIX_VIEW_FADER_POINTS
@@ -2674,6 +2698,8 @@ class CrossfadeController(
         inItem: MediaItem,
         durationMs: Long,
         nextDurationMs: Long,
+        /** Phase 3 Task 3: the smart plan's echo seconds; 0 keeps the delay unit off. */
+        echoSeconds: Double = 0.0,
     ) {
         val into = standby()
         if (out === into) return
@@ -2692,14 +2718,16 @@ class CrossfadeController(
         holdAtEnd(out)
         val sampleRate = outPort.sampleRate
         // BitChord, Automix 2.0 Phase 0: level-match the incoming deck from
-        // the analyses' own LUFS when both carry one, capped at ±6 dB —
+        // the analyses' v9 LUFS (tail for outgoing, head for incoming), capped at ±6 dB —
         // 10^(-0.3)..10^(+0.3) — so a badly mastered track is nudged toward
         // the outgoing one, not slammed onto it. Without LUFS on both sides,
         // the pre-Phase-0 loudnessGain ratio stands.
         val outAnalysis = analysisFor(outItem)
         val inAnalysis = analysisFor(inItem)
-        val inLevel = if (outAnalysis.lufs != null && inAnalysis.lufs != null) {
-            10.0.pow((outAnalysis.lufs!! - inAnalysis.lufs!!) / 20.0).coerceIn(10.0.pow(-0.3), 10.0.pow(0.3))
+        val outLufs = outAnalysis.lufsTail ?: outAnalysis.lufs
+        val inLufs = inAnalysis.lufsHead ?: inAnalysis.lufs
+        val inLevel = if (outLufs != null && inLufs != null) {
+            10.0.pow((outLufs - inLufs) / 20.0).coerceIn(10.0.pow(-0.3), 10.0.pow(0.3))
                 .toFloat()
         } else {
             (loudnessGain(inItem.mediaId) / loudnessGain(outItem.mediaId))
@@ -2718,7 +2746,7 @@ class CrossfadeController(
             val began = SystemClock.elapsedRealtime()
             val session = withContext(Dispatchers.Default) {
                 runCatching {
-                    LoopMixSession.build(plan, outItem.mediaId, inItem.mediaId, sampleRate, inLevel) { side, from, to ->
+                    LoopMixSession.build(plan, outItem.mediaId, inItem.mediaId, sampleRate, inLevel, echoSeconds) { side, from, to ->
                         if (side == LoopMix.Side.OUT) {
                             loopRegion(outItem, durationMs, from, to, sampleRate)
                         } else {
@@ -3670,9 +3698,11 @@ class CrossfadeController(
      *  - a filter ride brings it up a little early, behind its high-pass.
      *
      * [headroomFor] keeps two faders at full from summing past full scale.
+     * LUFS compensation is applied as a static multiplier so the incoming deck
+     * starts at its matched level before the crossfade curves shape the transition.
      */
     private fun mixRise(progress: Float): Float {
-        if (!render.advanced) return riseGain(progress)
+        if (!render.advanced) return riseGain(progress) * render.lufsCompensation
         val styled = when (render.style) {
             TransitionStyle.DJ_BLEND ->
                 if (render.bassSwap) held(riseGain(progress), riseGain(progress / render.swapAtF)) else riseGain(progress)
@@ -3683,7 +3713,7 @@ class CrossfadeController(
             else -> riseGain(progress)
         }
         val vocalSafe = riseGain(progress.pow(VOCAL_SAFE_RISE_SHAPE))
-        return styled + (vocalSafe - styled) * render.clash.toFloat()
+        return (styled + (vocalSafe - styled) * render.clash.toFloat()) * render.lufsCompensation
     }
 
     /**

@@ -16,6 +16,14 @@ constexpr int kControlFrames = 64;
 constexpr double kFadeSeconds = 0.025;
 constexpr double kPi = 3.14159265358979323846;
 
+/** Phase 3 Task 3: the delay unit's constants — identical to the web twin's (loopDeck.ts). */
+constexpr float kDelayFeedback = 0.35f;
+constexpr double kDelayFeedbackLowpassHz = 2500.0;
+/** Ceiling on the delay time: covers every beat down to 30 BPM; a longer, corrupt beat is a refused order. */
+constexpr double kDelayMaxSeconds = 2.0;
+/** The wet gain's ramp at both edges of the engagement window, as the web twin schedules it. */
+constexpr double kDelayWetRampSeconds = 0.01;
+
 }  // namespace
 
 float Envelope::at(double time) const {
@@ -54,6 +62,19 @@ void Biquad::highPass(double sampleRate, double frequency, double q) {
   const double a0 = 1 + alpha;
   b0 = float((1 + cosw) / 2 / a0);
   b1 = float(-(1 + cosw) / a0);
+  b2 = b0;
+  a1 = float(-2 * cosw / a0);
+  a2 = float((1 - alpha) / a0);
+}
+
+void Biquad::lowPass(double sampleRate, double frequency, double q) {
+  // RBJ cookbook LP, the BiquadFilterNode 'lowpass' the web twin's feedback loop uses.
+  const double w0 = 2 * kPi * frequency / sampleRate;
+  const double cosw = std::cos(w0), sinw = std::sin(w0);
+  const double alpha = sinw / (2 * q);
+  const double a0 = 1 + alpha;
+  b0 = float((1 - cosw) / 2 / a0);
+  b1 = float((1 - cosw) / a0);
   b2 = b0;
   a1 = float(-2 * cosw / a0);
   a2 = float((1 - alpha) / a0);
@@ -122,6 +143,24 @@ void Renderer::prepare() {
     deck.highPass.bypass();
     deck.shelfDb = 0;
     deck.highPassFreq = 0;
+
+    // Phase 3 Task 3: the delay unit's buffer, pre-assigned here — never in
+    // render. Sized for the plan-requestable delay (capped at kDelayMaxSeconds,
+    // which covers every beat down to 30 BPM); echoSeconds 0 leaves it empty,
+    // which is the bypass: no buffer, no cost on the render path.
+    deck.delaySize = 0;
+    deck.delayPos = 0;
+    deck.delayLeft.clear();
+    deck.delayRight.clear();
+    if (deck.delaySeconds > 0 && std::isfinite(deck.delaySeconds) && deck.delaySeconds <= kDelayMaxSeconds) {
+      const int size = int(std::ceil(deck.delaySeconds * sampleRate_)) + 1;
+      deck.delayLeft.assign(size, 0.f);
+      deck.delayRight.assign(size, 0.f);
+      deck.delaySize = size;
+      deck.delayLowPass.lowPass(sampleRate_, kDelayFeedbackLowpassHz, 0.7);
+    } else {
+      deck.delayWet = Envelope();
+    }
   }
 }
 
@@ -264,6 +303,7 @@ void Renderer::renderDeck(Deck& deck, int64_t frame, int frames) {
     }
     const float g0 = deck.gain.empty() ? 1.f : deck.gain.at(t0);
     const float g1 = deck.gain.empty() ? 1.f : deck.gain.at(t1);
+    const bool delayOn = deck.delaySize > 0;
     for (int i = 0; i < count; ++i) {
       const int n = at + i;
       float g = (g0 + (g1 - g0) * (float(i) / count)) * deck.level;
@@ -276,6 +316,31 @@ void Renderer::renderDeck(Deck& deck, int64_t frame, int frames) {
       float r = deck.shelf.tick(1, outRight_[n]);
       l = deck.highPass.tick(0, l);
       r = deck.highPass.tick(1, r);
+      if (delayOn) {
+        // Phase 3 Task 3: the delay gesture, the web twin's graph exactly. The
+        // post-filter tap goes into a circular buffer; each repeat is darkened
+        // by the low-pass and scaled down by the feedback on its way round, so
+        // the tail dissolves. The dry path above never passes through it, and
+        // the wet is added with its own envelope (the deck's gain does not
+        // ride it, as on the web). echoSeconds 0 lands here zero times: the
+        // unit's buffer was never assigned.
+        const int pos = deck.delayPos;
+        const float dl = deck.delayLeft[pos];
+        const float dr = deck.delayRight[pos];
+        float fedL = deck.delayLowPass.tick(0, dl) * kDelayFeedback + l;
+        float fedR = deck.delayLowPass.tick(1, dr) * kDelayFeedback + r;
+        // Flush to zero on the feedback path: a decaying tail must die in
+        // denormal-free silence, not spend the buffer's last seconds crawling
+        // through sub-normal arithmetic.
+        if (std::abs(fedL) < 1e-20f) fedL = 0;
+        if (std::abs(fedR) < 1e-20f) fedR = 0;
+        deck.delayLeft[pos] = fedL;
+        deck.delayRight[pos] = fedR;
+        deck.delayPos = pos + 1 == deck.delaySize ? 0 : pos + 1;
+        const float wet = deck.delayWet.at((frame + n) / sr);
+        mixLeft_[n] += dl * wet;
+        mixRight_[n] += dr * wet;
+      }
       mixLeft_[n] += l * g;
       mixRight_[n] += r * g;
     }
