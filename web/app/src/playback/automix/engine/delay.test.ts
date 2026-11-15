@@ -218,7 +218,7 @@ class MockDelayNode implements MockNode {
     let x = 0;
     for (const inp of this.inputs) x += evalNode(inp, n);
     const writeAt = n + delaySamples;
-    if (writeAt < this.buffer.length) this.buffer[writeAt] += x;
+    if (writeAt < this.buffer.length) this.buffer[writeAt] = (this.buffer[writeAt] ?? 0) + x;
     return delayed;
   }
   prepare(samples: number): void {
