@@ -74,8 +74,15 @@ class GoldenCorpusTest {
 
     @Test
     fun goldenCorpusTest() {
-        // Use absolute path to fixtures from project root
-        val fixturePath = File("C:/Users/A/Proyectos/BitChord-with-better-canvas-hate-3-4-/fixtures/golden-corpus.json").canonicalFile
+        // The fixture lives at the repo root; resolve it from the module dir
+        // the JVM test runs in, walking up so the test works anywhere.
+        var fixturePath = File("fixtures/golden-corpus.json")
+        for (walk in 1..4) {
+            if (fixturePath.exists()) break
+            val parent = fixturePath.canonicalFile.parentFile.parentFile ?: break
+            fixturePath = File(parent, "fixtures/golden-corpus.json")
+        }
+        fixturePath = fixturePath.canonicalFile
         println("FIXTURE PATH: ${fixturePath.absolutePath}, exists: ${fixturePath.exists()}")
         val json = fixturePath.readText()
         val gson = Gson()
