@@ -11,7 +11,7 @@
 // pitch-preserving playbackRate, or by a seek when it is far off.
 import { ThreeBandEQ } from './eq';
 import { Timeline } from './timeline';
-import { DeckDelay } from './loopDeck';
+import { DeckDelay, DeckReverb } from './loopDeck';
 
 export interface LoadedTrackMeta {
   fileKey: string;
@@ -56,6 +56,8 @@ export class Deck {
   readonly sweep: { highpass: BiquadFilterNode; lowpass: BiquadFilterNode };
   /** Phase 3 Task 2: the beat-synced delay throw, owned by this deck, fed from its chain. */
   readonly delay: DeckDelay;
+  /** Phase 3 Task 4: the short reverb for melodic closes, owned by this deck. */
+  readonly reverb: DeckReverb;
   readonly timeline = new Timeline();
   loaded: LoadedTrackMeta | null = null;
   /** How long play() takes to put audio out, learned from each start. */
@@ -90,10 +92,12 @@ export class Deck {
       lowpass: new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 20000, Q: 0.7 }),
     };
     this.delay = new DeckDelay(ctx, destination);
+    this.reverb = new DeckReverb(ctx, destination);
     ctx.createMediaElementSource(audio).connect(this.eq.input);
     this.eq.output.connect(this.sweep.highpass).connect(this.sweep.lowpass).connect(this.gain).connect(this.fader).connect(destination);
-    // the tap: the dry path never passes through the delay
+    // the tap: the dry path never passes through the delay or reverb
     this.sweep.lowpass.connect(this.delay.input);
+    this.sweep.lowpass.connect(this.reverb.input);
     audio.preservesPitch = true;
   }
 
@@ -185,7 +189,7 @@ export class Deck {
     if (this.pending.length === 0) this.audio.playbackRate = rate;
   }
 
-  /** Drop everything scheduled: automation, pending changes, the servo, the delay. */
+  /** Drop everything scheduled: automation, pending changes, the servo, the delay, the reverb. */
   cancel(): void {
     this.pending = [];
     this.locked = false;
@@ -193,6 +197,7 @@ export class Deck {
     this.timeline.clear();
     const now = this.ctx.currentTime;
     this.delay.release();
+    this.reverb.release();
     this.gain.gain.cancelScheduledValues(now);
     this.gain.gain.setValueAtTime(1, now);
     this.eq.reset();

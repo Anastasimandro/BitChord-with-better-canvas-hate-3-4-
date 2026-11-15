@@ -19,28 +19,6 @@ import {
   type CurveView,
 } from './policy';
 
-function analysis(fields: Partial<TrackAnalysis>): TrackAnalysis {
-  return {
-    fileKey: 'a',
-    path: '',
-    tags: { title: 'a', artist: '' },
-    durationSec: 0,
-    bpm: 120,
-    beatIntervalSec: 0.5,
-    firstDownbeatSec: 0,
-    gridConfidence: 0.8,
-    camelot: null,
-    keyName: null,
-    keyConfidence: 0,
-    energy: 0.5,
-    energyCurve: [],
-    introEndSec: 0,
-    outroStartSec: null,
-    analysisVersion: 9,
-    ...fields,
-  };
-}
-
 /** A CurveView over one curve at one frame size. */
 function view(curve: number[], windowSec: number, startSec: number, durationSec: number): CurveView {
   return { curve, windowSec, startSec, endSec: startSec + curve.length * windowSec };
@@ -275,5 +253,150 @@ describe('vocalShare', () => {
   it('returns 1 when all above threshold', () => {
     const w = [vw(0, [0.5, 0.5, 0.5])];
     expect(vocalShare(w, 0, 0.3)).toBe(1);
+  });
+});
+// Phase 3 Task 5 — FILTER gate unit tests
+import {
+  KICK_PRESENT,
+  BLEND_STRETCH_MIN,
+  BLEND_STRETCH_MAX,
+  computeLowEnergyAtJoin,
+  scoreStyles,
+  type StyleScorerInput,
+} from './policy';
+
+function analysis(fields: Partial<TrackAnalysis>): TrackAnalysis {
+  return {
+    fileKey: 'a',
+    path: '',
+    tags: { title: 'a', artist: '' },
+    durationSec: 200,
+    bpm: 120,
+    beatIntervalSec: 0.5,
+    firstDownbeatSec: 0,
+    gridConfidence: 0.8,
+    camelot: null,
+    keyName: null,
+    keyConfidence: 0,
+    energy: 0.5,
+    energyCurve: Array(400).fill(0.5),
+    energySpans: [],
+    introEndSec: 16,
+    outroStartSec: 170,
+    analysisVersion: 9,
+    gridVersion: 1,
+    vocalVersion: 1,
+    miscVersion: 1,
+    ...fields,
+  };
+}
+
+/** Helper to create a StyleScorerInput with configurable FILTER gate inputs. */
+function scorerInput(overrides: Partial<StyleScorerInput> = {}): StyleScorerInput {
+  const out = analysis({});
+  const inn = analysis({});
+  return {
+    out,
+    inn,
+    outGridConf: 0.8,
+    inGridConf: 0.8,
+    vocalOverlap: 0.05,
+    stretchRatio: 1.0,
+    residualDeltaLufs: null,
+    loopPlan: null,
+    energyContinuity: 0.8,
+    outLowEnergyAtJoin: null,
+    inLowEnergyAtJoin: null,
+    ...overrides,
+  };
+}
+
+
+describe('FILTER gate (Phase 3 Task 5)', () => {
+  it('fails with killReason "no-two-kicks" when no kicks and tempo is matchable', () => {
+    const input = scorerInput({
+      stretchRatio: 1.05, // within 0.9-1.25
+      outLowEnergyAtJoin: 0.3, // below KICK_PRESENT (0.5)
+      inLowEnergyAtJoin: 0.3,  // below KICK_PRESENT
+    });
+    const result = scoreStyles(input);
+    expect(result.style).not.toBe('filter');
+    // FILTER should be rejected with 'no-two-kicks'
+    const filterRejection = result.rejectedStylesAndWhy.find(r => r.style === 'filter');
+    expect(filterRejection).toBeDefined();
+    expect(filterRejection!.reason).toBe('no-two-kicks');
+  });
+
+  it('passes with filterGateReason "two-kicks" when both sides have kicks at join', () => {
+    const input = scorerInput({
+      stretchRatio: 1.05, // within 0.9-1.25 (matchable tempo)
+      outLowEnergyAtJoin: 0.7, // above KICK_PRESENT (0.5)
+      inLowEnergyAtJoin: 0.6,  // above KICK_PRESENT
+    });
+    const result = scoreStyles(input);
+    expect(result.style).toBe('filter');
+    expect(result.filterGateReason).toBe('two-kicks');
+  });
+
+  it('passes with filterGateReason "impossible-tempo" when stretch ratio < 0.9', () => {
+    const input = scorerInput({
+      stretchRatio: 0.8, // below BLEND_STRETCH_MIN (0.9) - impossible tempo
+      outLowEnergyAtJoin: 0.3, // no kicks
+      inLowEnergyAtJoin: 0.3,
+    });
+    const result = scoreStyles(input);
+    expect(result.style).toBe('filter');
+    expect(result.filterGateReason).toBe('impossible-tempo');
+  });
+
+  it('passes with filterGateReason "impossible-tempo" when stretch ratio > 1.25', () => {
+    const input = scorerInput({
+      stretchRatio: 1.5, // above BLEND_STRETCH_MAX (1.25) - impossible tempo
+      outLowEnergyAtJoin: 0.3, // no kicks
+      inLowEnergyAtJoin: 0.3,
+    });
+    const result = scoreStyles(input);
+    expect(result.style).toBe('filter');
+    expect(result.filterGateReason).toBe('impossible-tempo');
+  });
+
+  it('passes with filterGateReason "impossible-tempo" even when two kicks present (impossible tempo takes precedence)', () => {
+    const input = scorerInput({
+      stretchRatio: 0.8, // impossible tempo
+      outLowEnergyAtJoin: 0.7, // has kicks
+      inLowEnergyAtJoin: 0.6,
+    });
+    const result = scoreStyles(input);
+    expect(result.style).toBe('filter');
+    expect(result.filterGateReason).toBe('impossible-tempo');
+  });
+
+  it('filterGateReason is null for non-FILTER styles', () => {
+    const input = scorerInput({
+      stretchRatio: 1.05,
+      outLowEnergyAtJoin: 0.7,
+      inLowEnergyAtJoin: 0.6,
+      outGridConf: 0.9,
+      inGridConf: 0.9,
+    });
+    // High confidence should prefer BLEND over FILTER
+    const result = scoreStyles(input);
+    if (result.style !== 'filter') {
+      expect(result.filterGateReason).toBeNull();
+    }
+  });
+
+  it('computeLowEnergyAtJoin returns energy at the join window', () => {
+    // Create an analysis with energySpans covering the join
+    const a = analysis({
+      durationSec: 200,
+      energySpans: [
+        { startSec: 168, windowSec: 0.5, curve: Array(40).fill(0.7) }, // covers 168-188s
+      ],
+    });
+    // Join at 170s, window 2s -> 168-170s
+    const result = computeLowEnergyAtJoin(a, 170, 2);
+    expect(result).not.toBeNull();
+    expect(result!).toBeGreaterThan(0);
   });
 });

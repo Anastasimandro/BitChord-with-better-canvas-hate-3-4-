@@ -42,6 +42,18 @@ export const DELAY_FEEDBACK_LOWPASS_HZ = 2500;
 /** Ceiling on the delay time: covers every beat down to 30 BPM; a longer, corrupt beat is a refused order. */
 const DELAY_MAX_SEC = 2;
 
+/**
+ * Phase 3 Task 4: the reverb gesture's render graph — a short synthetic
+ * impulse response convolved on the outgoing deck's tail for melodic-sustained
+ * closes. The IR is exponentially decaying noise (0.5-1.0 s, stereo),
+ * generated ONCE at module init. The wet gain stays at 0 until the last 2
+ * beats of the outgoing track, then rises following the plan's release curve
+ * timing. Dry path untouched. Same teardown discipline as the delay: wet dies
+ * before the handover, no leaks.
+ */
+export const REVERB_IR_SEC = 0.75; // fixed IR length for the synthetic IR
+export const REVERB_WET_ATTACK_SEC = 0.02; // fast attack to avoid click
+
 export class DeckDelay {
   /** The deck taps its chain into here; the dry path never passes through the delay. */
   readonly input: GainNode;
@@ -104,12 +116,99 @@ export class DeckDelay {
   }
 }
 
+/**
+ * Phase 3 Task 4: the reverb gesture — a ConvolverNode with a synthetic IR on
+ * the outgoing deck. The IR is generated once (module init), stereo, exponentially
+ * decaying noise. Wet gain is 0 until the last 2 beats of the outgoing track,
+ * then rises per the plan's release timing. Dry path never passes through it.
+ * Teardown mirrors DeckDelay: wet killed before handover, nodes reusable.
+ */
+export class DeckReverb {
+  /** The deck taps its chain into here; the dry path never passes through the reverb. */
+  readonly input: GainNode;
+  private readonly ctx: AudioContext;
+  private readonly destination: AudioNode;
+  private readonly convolver: ConvolverNode;
+  private readonly wet: GainNode;
+  private wetConnected = false;
+  private static irBuffer: AudioBuffer | null = null;
+
+  constructor(ctx: AudioContext, destination: AudioNode) {
+    this.ctx = ctx;
+    this.destination = destination;
+    this.convolver = new ConvolverNode(ctx);
+    this.wet = new GainNode(ctx, { gain: 0 });
+    this.input = new GainNode(ctx, { gain: 1 });
+    this.input.connect(this.convolver).connect(this.wet);
+    this.ensureIR();
+  }
+
+  /** Generates the synthetic IR once: exponentially decaying noise, stereo, REVERB_IR_SEC. */
+  private ensureIR(): void {
+    if (DeckReverb.irBuffer) {
+      this.convolver.buffer = DeckReverb.irBuffer;
+      return;
+    }
+    const sr = this.ctx.sampleRate;
+    const len = Math.ceil(REVERB_IR_SEC * sr);
+    const buffer = this.ctx.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buffer.getChannelData(ch);
+      // Exponential decay: e^(-t/tau) with tau ~ 0.3 * length for natural feel
+      const tau = REVERB_IR_SEC * 0.3;
+      for (let i = 0; i < len; i++) {
+        const t = i / sr;
+        const decay = Math.exp(-t / tau);
+        // White noise with exponential decay, slight stereo decorrelation
+        data[i] = (Math.random() * 2 - 1) * decay * (ch === 0 ? 1 : 0.7);
+      }
+    }
+    DeckReverb.irBuffer = buffer;
+    this.convolver.buffer = buffer;
+  }
+
+  /**
+   * Opens the wet at [openAt] and kills it at [closeAt] — the engagement
+   * window, always inside the transition; the outgoing wet dies before any
+   * handover. The wet rises from 0 at [openAt] over REVERB_WET_ATTACK_SEC,
+   * holds until just before [closeAt], then ramps to 0 at [closeAt].
+   */
+  engage(openAt: number, closeAt: number): void {
+    if (!Number.isFinite(openAt) || !Number.isFinite(closeAt) || closeAt <= openAt) return;
+    const now = this.ctx.currentTime;
+    if (!this.wetConnected) {
+      this.wet.connect(this.destination);
+      this.wetConnected = true;
+    }
+    this.wet.gain.cancelScheduledValues(now);
+    this.wet.gain.setValueAtTime(0, now);
+    this.wet.gain.setValueAtTime(0, openAt);
+    this.wet.gain.linearRampToValueAtTime(1, openAt + REVERB_WET_ATTACK_SEC);
+    // hold until just before closeAt, then die
+    this.wet.gain.setValueAtTime(1, Math.max(openAt + REVERB_WET_ATTACK_SEC, closeAt - 0.01));
+    this.wet.gain.linearRampToValueAtTime(0, closeAt);
+  }
+
+  /** Teardown: wet silent now and released from the destination. Nodes stay reusable. */
+  release(): void {
+    const now = this.ctx.currentTime;
+    this.wet.gain.cancelScheduledValues(now);
+    this.wet.gain.setValueAtTime(0, now);
+    if (this.wetConnected) {
+      this.wet.disconnect();
+      this.wetConnected = false;
+    }
+  }
+}
+
 export class LoopDeck {
   readonly eq: ThreeBandEQ;
   readonly gain: GainNode;
   readonly sweep: { highpass: BiquadFilterNode; lowpass: BiquadFilterNode };
   /** Phase 3 Task 2: the beat-synced delay throw, owned by this deck, fed from its chain. */
   readonly delay: DeckDelay;
+  /** Phase 3 Task 4: the short reverb for melodic closes, owned by this deck. */
+  readonly reverb: DeckReverb;
   /** Track seconds the loaded region starts at. */
   regionStart = 0;
   regionEnd = 0;
@@ -130,12 +229,14 @@ export class LoopDeck {
     };
     this.gain = new GainNode(ctx, { gain: 0 });
     this.delay = new DeckDelay(ctx, destination);
+    this.reverb = new DeckReverb(ctx, destination);
     stretch.connect(this.eq.input);
     // AutoMix's: keeps inputTime current (the default leaves it stale)
     stretch.setUpdateInterval(0.05);
     this.eq.output.connect(this.sweep.highpass).connect(this.sweep.lowpass).connect(this.gain).connect(destination);
-    // the tap: the dry path never passes through the delay
+    // the tap: the dry path never passes through the delay or reverb
     this.sweep.lowpass.connect(this.delay.input);
+    this.sweep.lowpass.connect(this.reverb.input);
   }
 
   static async create(ctx: AudioContext, destination: AudioNode): Promise<LoopDeck> {
@@ -183,13 +284,14 @@ export class LoopDeck {
     this.dispatcherCleanup = null;
   }
 
-  /** Stops now and forgets everything queued; filters, EQ, gain and the delay back to rest. */
+  /** Stops now and forgets everything queued; filters, EQ, gain, delay and reverb back to rest. */
   stop(): void {
     this.pending = [];
     this.detachScheduler();
     this.stretch.schedule({ active: false });
     const now = this.ctx.currentTime;
     this.delay.release();
+    this.reverb.release();
     this.gain.gain.cancelScheduledValues(now);
     this.gain.gain.setValueAtTime(0, now);
     this.eq.reset();

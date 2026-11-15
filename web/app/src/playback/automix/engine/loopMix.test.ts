@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('signalsmith-stretch', () => ({ default: vi.fn() }));
 import type { TrackAnalysis } from '../analysis/types';
 import type { LoopChange, LoopDeck } from './loopDeck';
-import { LOOP_BARS, mixBeatPhaseAt, mixPositionAt, planLoopMix, scheduleLoopMix, sungShare, sungSpansFromLines } from './loopMix';
+import { LOOP_BARS, LOOP_MAX_REPETITIONS, LOOP_MAX_TOTAL_LOG_RATIO, mixBeatPhaseAt, mixPositionAt, planLoopMix, scheduleLoopMix, sungShare, sungSpansFromLines } from './loopMix';
 
 /** Synced lyrics with nothing sung in the searched stretches: every loop is clear. */
 const CLEAR = { out: [] as [number, number][], in: [] as [number, number][] };
@@ -106,10 +106,11 @@ describe('planLoopMix', () => {
     const wide = planLoopMix(analysis('o', 111, 200), buffer(200), analysis('i', 169, 180), buffer(180), 0, CLEAR)!;
     expect(wide.fold).toBe(2);
     expect(wide.rampBars).toBe(Math.ceil((111 - 169 / 2) / 2.5));
-    const slow = planLoopMix(analysis('o', 170, 200), buffer(200), analysis('i', 80, 180), buffer(180), 0, CLEAR)!;
-    expect(slow.fold).toBe(0.5);
+    // 170 vs 80 exceeds LOOP_MAX_TOTAL_LOG_RATIO (|log(80/170)| ≈ 0.75 > 0.5) -> degrades
+    const slow = planLoopMix(analysis('o', 170, 200), buffer(200), analysis('i', 80, 180), buffer(180), 0, CLEAR);
+    expect(slow).toBeNull();
     // the incoming loop can only let go at its own boundary
-    for (const p of [near, wide, slow]) expect(p.totalBars % (LOOP_BARS / p.fold)).toBe(0);
+    for (const p of [near, wide]) expect(p.totalBars % (LOOP_BARS / p.fold)).toBe(0);
   });
 });
 
@@ -271,5 +272,113 @@ describe('music videos', () => {
     expect(planLoopMix(video, buffer(200), analysis('in', 120, 180), buffer(180), 0, CLEAR)).toBeNull();
     const videoIn = { ...analysis('in', 120, 180), musicVideo: true };
     expect(planLoopMix(analysis('out', 120, 200), buffer(200), videoIn, buffer(180), 0, CLEAR)).toBeNull();
+  });
+});
+
+// ============================================================================
+// Phase 3 Task 6 — Loop Mix Polish caps
+// ============================================================================
+
+describe('LOOP_MAX_REPETITIONS cap (stuck needle)', () => {
+  it('degrades to null when a 2-bar loop would need >12 reps', () => {
+    // outgoing: 120 BPM, 2-bar loop = 4 s per loop
+    // incoming: 120 BPM, 4-bar loop = 8 s per loop (fold=1)
+    // rampBars = 0 (same tempo), enterBars=4, exitBars=2, totalBars = 6 incoming bars
+    // but we need incoming loop to cover the whole mix, so we round up to incoming loop boundaries
+    // incoming loop is 4 bars, so totalBars = 8 (2 incoming loops)
+    // outgoing 2-bar loop needs 8/2 = 4 reps — within cap
+    //
+    // To exceed 12 reps: outgoing 2-bar loop, incoming 4-bar loop, large tempo gap
+    // Let outgoing = 100 BPM (2-bar = 4.8 s), incoming = 150 BPM (4-bar = 8 s at its own tempo)
+    // fold = 1 (150 vs 100, 150/100=1.5, half=0.75 -> closer to 1.5? No, let's use fold=1)
+    // Actually, let's make it simpler: outgoing 2-bar, incoming 4-bar, ramp forces many reps
+    // We need totalBars / outBars > 12
+    // totalBars = ceil((4 + rampBars + 2) / (inBars/fold)) * (inBars/fold)
+    // With outBars=2, inBars=4, fold=1: inLoopOutBars = 4
+    // Need ceil((6 + rampBars) / 4) * 4 / 2 > 12 => ceil((6+rampBars)/4) > 6 => (6+rampBars)/4 > 5 => rampBars > 14
+    // rampBars = ceil(|target - outBpm| / 2.5)
+    // Let outBpm = 100, target = 100 (fold=1) -> rampBars=2 (MIN_RAMP_BARS)
+    // Need target far from outBpm: outBpm=100, target=150 -> diff=50, rampBars=20 (capped at 24)
+    // But fold would be 1 (150/100=1.5, half=0.75 -> 1.5 is closer to 1? No, |1.5-1|=0.5, |0.75-1|=0.25 -> fold=0.5 wins)
+    // Let's use outBpm=100, inBpm=200 -> fold=1 (200/100=2, half=1 -> fold=2 is exact)
+    // outBpm=100, inBpm=200, fold=1 (200/100=2, fold=2 gives target=100, perfect)
+    // So with fold=2: target = 200/2 = 100 = outBpm, rampBars=2
+    // Need fold=1 with large gap: outBpm=100, inBpm=170 -> 170/100=1.7, half=0.85 -> fold=1, target=170, diff=70, rampBars=28 -> capped at 24
+    // inBars=4, fold=1 -> inLoopOutBars=4
+    // totalBars = ceil((4+24+2)/4)*4 = ceil(30/4)*4 = 8*4=32
+    // outBars=2 -> reps = 32/2 = 16 > 12 ✓
+    const out = analysis('out', 100, 200);
+    const inn = analysis('in', 170, 180);
+    const plan = planLoopMix(out, buffer(200), inn, buffer(180), 0, CLEAR);
+    expect(plan).toBeNull(); // degraded due to repetition cap
+  });
+
+  it('stays LOOP when a 2-bar loop needs exactly 12 reps', () => {
+    // outBpm=100, inBpm=155 -> fold=1, target=155, diff=55, rampBars=22
+    // inBars=4, fold=1 -> inLoopOutBars=4
+    // totalBars = ceil((4+22+2)/4)*4 = ceil(28/4)*4 = 7*4=28
+    // outBars=2 -> reps = 14 > 12 (still over)
+    // Need totalBars = 24 for 12 reps: totalBars/2 = 12
+    // ceil((6+rampBars)/4)*4 = 24 => ceil((6+rampBars)/4) = 6 => (6+rampBars)/4 > 5 => rampBars > 14
+    // rampBars=15 -> ceil(21/4)=6 -> totalBars=24 -> reps=12 (at cap)
+    // rampBars=15 means diff=15*2.5=37.5 BPM
+    // outBpm=100, target=137.5 -> inBpm=137.5 (fold=1)
+    const out = analysis('out', 100, 200);
+    const inn = analysis('in', 137.5, 180);
+    const plan = planLoopMix(out, buffer(200), inn, buffer(180), 0, CLEAR);
+    expect(plan).not.toBeNull();
+    expect(plan!.totalBars / plan!.out.bars).toBeLessThanOrEqual(LOOP_MAX_REPETITIONS);
+  });
+});
+
+describe('LOOP_MAX_TOTAL_LOG_RATIO cap (fold+stretch artifact)', () => {
+  it('degrades to null when |log(fold * stretch)| exceeds the cap', () => {
+    // fold=2, stretch_ratio=0.7 -> total ratio = 1.4, |log(1.4)| ≈ 0.336 < 0.5 (passes)
+    // fold=2, stretch_ratio=0.6 -> total ratio = 1.2, |log(1.2)| ≈ 0.182 (passes)
+    // We need total ratio > e^0.5 ≈ 1.65 or < e^-0.5 ≈ 0.607
+    // fold=2, stretch_ratio=0.85 -> total=1.7, |log(1.7)| ≈ 0.53 > 0.5 (fails)
+    // stretch_ratio = target/outBpm = inBpm/(fold*outBpm)
+    // We want fold=2, total_ratio = 1.7 -> stretch_ratio = 0.85
+    // inBpm = fold * outBpm * stretch_ratio = 2 * outBpm * 0.85 = 1.7 * outBpm
+    // Let outBpm=100, inBpm=170
+    // fold check: 170/100=1.7, half=0.85, double=3.4 -> fold=1 is closest to 1 (|1.7-1|=0.7)
+    // Wait, fold is chosen to MINIMIZE |log(inBpm/fold/outBpm)|
+    // |log(170/1/100)| = |log(1.7)| ≈ 0.53
+    // |log(170/2/100)| = |log(0.85)| ≈ 0.16
+    // |log(170/0.5/100)| = |log(3.4)| ≈ 1.22
+    // So fold=2 is chosen, target = 170/2 = 85
+    // stretch_ratio = 85/100 = 0.85
+    // total_ratio = fold * stretch_ratio = 2 * 0.85 = 1.7
+    // |log(1.7)| ≈ 0.53 > 0.5 ✓ (fails)
+    const out = analysis('out', 100, 200);
+    const inn = analysis('in', 170, 180);
+    const plan = planLoopMix(out, buffer(200), inn, buffer(180), 0, CLEAR);
+    expect(plan).toBeNull(); // degraded due to artifact cap
+  });
+
+  it('stays LOOP when |log(fold * stretch)| is within the cap', () => {
+    // fold=2, stretch_ratio=0.8 -> total=1.6, |log(1.6)| ≈ 0.47 < 0.5 (passes)
+    // outBpm=100, inBpm=160 -> 160/100=1.6, fold=2 (target=80), stretch=0.8, total=1.6
+    const out = analysis('out', 100, 200);
+    const inn = analysis('in', 160, 180);
+    const plan = planLoopMix(out, buffer(200), inn, buffer(180), 0, CLEAR);
+    expect(plan).not.toBeNull();
+    const fold = plan!.fold;
+    const stretchRatio = (plan!.in.bpm / fold) / plan!.out.bpm;
+    const totalLogRatio = Math.abs(Math.log(fold * stretchRatio));
+    expect(totalLogRatio).toBeLessThanOrEqual(LOOP_MAX_TOTAL_LOG_RATIO);
+  });
+
+  it('without fold (fold=1), the stretch window 0.9..1.25 guarantees |log| ≤ 0.223', () => {
+    // outBpm=100, inBpm=125 (max stretch) -> fold=1, stretch=1.25, |log(1.25)| ≈ 0.223
+    const out = analysis('out', 100, 200);
+    const inn = analysis('in', 125, 180);
+    const plan = planLoopMix(out, buffer(200), inn, buffer(180), 0, CLEAR);
+    expect(plan).not.toBeNull();
+    const fold = plan!.fold;
+    const stretchRatio = (plan!.in.bpm / fold) / plan!.out.bpm;
+    const totalLogRatio = Math.abs(Math.log(fold * stretchRatio));
+    expect(totalLogRatio).toBeLessThanOrEqual(LOOP_MAX_TOTAL_LOG_RATIO);
+    expect(fold).toBe(1);
   });
 });

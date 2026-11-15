@@ -237,7 +237,7 @@ export function plannedBars(
  * user's call, 2026-10-23; the phone's STRETCH_WINDOW is 0.9..1.1). [rate] is
  * the incoming song's playback rate, outgoing BPM over incoming BPM:
  * - below 1, the incoming song is slowed down: at most 10%;
- * - above 1, it is sped up: at most 25%.
+ * above 1, it is sped up: at most 25%.
  * The loop mix ramps any gap; this is for the blend it falls back on.
  */
 export function stretchAllowed(rate: number): boolean {
@@ -247,6 +247,8 @@ const MAX_SLOW_DOWN = 0.1;
 const MAX_SPEED_UP = 0.25;
 /** BitChord: a filter mix is at most this many outgoing bars (the phone's DJ_FILTER length). */
 const FILTER_MAX_BARS = 8;
+/** Phase 3 Task 5: two-kick filter caps at 4 bars — a kick handoff is a moment, not a journey. */
+const FILTER_MAX_OVERLAP_BARS = 4;
 
 /**
  * BitChord, after the phone's DJ_FILTER (TransitionPlanner.kt): a pair that
@@ -459,6 +461,26 @@ function engageDelayGesture(
   deck.delay.engage(beatSec, plan.t0, plan.t0 + plan.durationSec);
 }
 
+/**
+ * Phase 3 Task 4: bloom the OUTGOING deck's melodic close with short reverb.
+ * The wet gain is 0 until the last 2 beats of the outgoing track, then rises
+ * following the plan's release curve timing. The dry path is untouched.
+ * Teardown mirrors the delay: wet dies before the handover.
+ */
+function engageReverbGesture(
+  deck: Deck,
+  grid: NonNullable<ReturnType<typeof gridOf>>,
+  outRate: number,
+  plan: Pick<TransitionPlan, 't0' | 'durationSec'>,
+): void {
+  const beatSec = grid.beatSec / outRate;
+  // Reverb opens at the last 2 beats of the outgoing track
+  const openAt = plan.t0 + plan.durationSec - 2 * beatSec;
+  // Reverb closes at the end of the transition (before handover)
+  const closeAt = plan.t0 + plan.durationSec;
+  deck.reverb.engage(openAt, closeAt);
+}
+
 /** Step the incoming deck's rate back to 1.0 in inaudible ~0.8% increments. */
 function glideRateToUnity(deck: Deck, fromRate: number, startCtxTime: number): void {
   if (Math.abs(fromRate - 1) < 0.002) {
@@ -602,7 +624,7 @@ export function scheduleWithStyleScorer(
   };
 
   // Score all candidates
-  const { style, score, rejectedStylesAndWhy, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, gestureSeconds, rejectedGesturesAndWhy } = scoreStyles(scorerInput);
+  const { style, score, rejectedStylesAndWhy, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, gestureSeconds, rejectedGesturesAndWhy, filterGateReason } = scoreStyles(scorerInput);
 
   // Convert rejected styles to telemetry format
   const rejections = rejectedStylesAndWhy.map((r) => ({ style: r.style as MixStyle, reason: r.reason }));
@@ -625,7 +647,9 @@ export function scheduleWithStyleScorer(
       const blendReq: TransitionRequest = { ...req, bars };
       const blendPlan = scheduleTransition(blendReq);
       // Phase 3 Task 2: the chosen delay throws only from the outgoing deck
-      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, blendPlan);
+      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, blendPlan);
+      // Phase 3 Task 4: the chosen reverb blooms the outgoing deck's melodic close
+      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, blendPlan);
       // Override bass swap if not allowed
       if (!bassSwapAllowed) {
         // The scheduler already handles short blends (<8 bars) with gentle swap
@@ -634,32 +658,50 @@ export function scheduleWithStyleScorer(
       }
       return { ...blendPlan, style: 'blend', reason: null, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
 
-    case 'filter':
-      const filterReq: TransitionRequest = { ...req, bars: Math.min(requestedBars, FILTER_MAX_BARS) };
-      const filterReason = toGrid
-        ? `tempos ${Math.round(Math.abs(stretchRatio - 1) * 100)}% apart`
-        : 'next song has no beat grid';
+    case 'filter': {
+      // Phase 3 Task 5: two-kick filter caps at 4 bars, impossible-tempo filter keeps 8 bars
+      const filterMaxBars = filterGateReason === 'two-kicks' ? FILTER_MAX_OVERLAP_BARS : FILTER_MAX_BARS;
+      const filterReq: TransitionRequest = { ...req, bars: Math.min(requestedBars, filterMaxBars) };
+      const filterReason = filterGateReason === 'two-kicks'
+        ? 'two kicks at join'
+        : (toGrid
+            ? `tempos ${Math.round(Math.abs(stretchRatio - 1) * 100)}% apart`
+            : 'next song has no beat grid');
       const filterPlan = scheduleFilterMix(filterReq, earliest, fromGrid!, toGrid, filterReason);
-      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, filterPlan);
+      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, filterPlan);
+      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, filterPlan);
       return { ...filterPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
-
-    case 'fade':
+    }
+    case 'fade': {
       // FADE = phrase-aligned blend at 6-8s (confidence-scaled)
+      // If grids aren't usable, fall back to plain crossfade (scheduleFallback)
       const fadeBars = Math.min(bars, 8); // cap at 8 bars for fade
       const fadeReq: TransitionRequest = { ...req, bars: fadeBars };
-      const fadePlan = scheduleTransition(fadeReq);
-      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, fadePlan);
-      return { ...fadePlan, style: 'fade', rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+      const gridsUsable =
+        fromGrid !== null &&
+        toGrid !== null &&
+        fromAnalysis.gridConfidence >= MIN_GRID_CONFIDENCE &&
+        toAnalysis.gridConfidence >= MIN_GRID_CONFIDENCE;
+      const fadePlan = gridsUsable
+        ? scheduleTransition(fadeReq)
+        : scheduleFallback(req, earliest, 'grids not usable for phrase-aligned fade');
+      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, fadePlan);
+      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, fadePlan);
+      // Use the plan's actual style (crossfade when grids not usable, fade when they are)
+      return { ...fadePlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+    }
 
     case 'gap': {
       const gapPlan = scheduleGapMix(req);
-      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, gapPlan);
+      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, gapPlan);
+      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, gapPlan);
       return { ...gapPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
     }
 
     default: {
       const fallbackPlan = scheduleFallback(req, earliest, 'unknown style from scorer');
-      if (gesture === 'delay') engageDelayGesture(from, fromGrid!, outRate, fallbackPlan);
+      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, fallbackPlan);
+      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, fallbackPlan);
       return { ...fallbackPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
     }
   }

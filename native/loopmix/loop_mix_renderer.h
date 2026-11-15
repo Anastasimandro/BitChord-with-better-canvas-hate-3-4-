@@ -112,6 +112,22 @@ struct Deck {
   int delaySize = 0;   // frames in the circular buffer; 0 = the unit is off
   int delayPos = 0;    // next write position (== oldest sample)
 
+  // Phase 3 Task 4: the reverb gesture's render unit, one per deck. A
+  // ConvolverNode with a synthetic IR on the web; here a per-block
+  // convolution with the same IR (exponentially decaying noise, stereo,
+  // REVERB_IR_SEC). The dry path never passes through it. The wet gain has
+  // its own envelope; 0 reverbSeconds means the unit is absent and costs
+  // nothing. The IR is generated once at process init and shared.
+  double reverbSeconds = 0;
+  Envelope reverbWet;
+  std::vector<float> reverbIRLeft;
+  std::vector<float> reverbIRRight;
+  int reverbIRSize = 0;
+  // Convolution state: circular buffer for the input history needed for the IR
+  std::vector<float> reverbHistLeft;
+  std::vector<float> reverbHistRight;
+  int reverbHistPos = 0;
+
   /** Track seconds an unwrapped position plays (continuous; the loop and its release applied). */
   double trackSecondsAt(double unwrapped, double sampleRate) const;
   /** The unwrapped position, after the release, that plays track second [seconds]. */

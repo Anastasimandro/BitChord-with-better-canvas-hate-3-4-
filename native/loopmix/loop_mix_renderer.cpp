@@ -24,6 +24,33 @@ constexpr double kDelayMaxSeconds = 2.0;
 /** The wet gain's ramp at both edges of the engagement window, as the web twin schedules it. */
 constexpr double kDelayWetRampSeconds = 0.01;
 
+/** Phase 3 Task 4: the reverb unit's constants — identical to the web twin's (loopDeck.ts). */
+constexpr double kReverbIRSec = 0.75;
+/** The wet gain's attack ramp at the engagement window's open, as the web twin schedules it. */
+constexpr double kReverbWetAttackSec = 0.02;
+
+/** Phase 3 Task 4: generates the synthetic IR once (exponentially decaying noise, stereo). */
+void generateReverbIR(int sampleRate, std::vector<float>& outLeft, std::vector<float>& outRight) {
+  const int len = int(std::ceil(kReverbIRSec * sampleRate));
+  outLeft.resize(len);
+  outRight.resize(len);
+  // Exponential decay: e^(-t/tau) with tau ~ 0.3 * length for natural feel
+  const double tau = kReverbIRSec * 0.3;
+  for (int i = 0; i < len; ++i) {
+    const double t = i / double(sampleRate);
+    const double decay = std::exp(-t / tau);
+    // White noise with exponential decay, slight stereo decorrelation
+    // Using a simple LCG for deterministic generation
+    static uint32_t seed = 0x9E3779B9;
+    auto nextRand = [&]() -> float {
+      seed = seed * 1664525 + 1013904223;
+      return float(seed) / float(0xFFFFFFFF) * 2.f - 1.f;
+    };
+    outLeft[i] = nextRand() * float(decay);
+    outRight[i] = nextRand() * float(decay) * 0.7f;
+  }
+}
+
 }  // namespace
 
 float Envelope::at(double time) const {
@@ -132,6 +159,15 @@ double Deck::knotRate(double t) const {
 Renderer::Renderer(int sampleRate) : sampleRate_(sampleRate) {}
 
 void Renderer::prepare() {
+  // Phase 3 Task 4: generate the synthetic IR once per process (shared by all decks).
+  static std::vector<float> gReverbIRLeft;
+  static std::vector<float> gReverbIRRight;
+  static bool gReverbIRGenerated = false;
+  if (!gReverbIRGenerated) {
+    generateReverbIR(sampleRate_, gReverbIRLeft, gReverbIRRight);
+    gReverbIRGenerated = true;
+  }
+
   for (Deck& deck : decks_) {
     // The cheaper preset with its computation spread evenly: the mix is
     // written well ahead of the speaker, so latency costs nothing, and an even
@@ -160,6 +196,24 @@ void Renderer::prepare() {
       deck.delayLowPass.lowPass(sampleRate_, kDelayFeedbackLowpassHz, 0.7);
     } else {
       deck.delayWet = Envelope();
+    }
+
+    // Phase 3 Task 4: the reverb unit's buffers, pre-assigned here — never in render.
+    deck.reverbIRSize = 0;
+    deck.reverbHistPos = 0;
+    deck.reverbHistLeft.clear();
+    deck.reverbHistRight.clear();
+    deck.reverbIRLeft.clear();
+    deck.reverbIRRight.clear();
+    if (deck.reverbSeconds > 0 && std::isfinite(deck.reverbSeconds) && deck.reverbSeconds <= kReverbIRSec) {
+      deck.reverbIRSize = gReverbIRLeft.size();
+      deck.reverbIRLeft = gReverbIRLeft;
+      deck.reverbIRRight = gReverbIRRight;
+      // History buffer for convolution: need IR length samples of history
+      deck.reverbHistLeft.assign(deck.reverbIRSize, 0.f);
+      deck.reverbHistRight.assign(deck.reverbIRSize, 0.f);
+    } else {
+      deck.reverbWet = Envelope();
     }
   }
 }
@@ -304,6 +358,7 @@ void Renderer::renderDeck(Deck& deck, int64_t frame, int frames) {
     const float g0 = deck.gain.empty() ? 1.f : deck.gain.at(t0);
     const float g1 = deck.gain.empty() ? 1.f : deck.gain.at(t1);
     const bool delayOn = deck.delaySize > 0;
+    const bool reverbOn = deck.reverbIRSize > 0;
     for (int i = 0; i < count; ++i) {
       const int n = at + i;
       float g = (g0 + (g1 - g0) * (float(i) / count)) * deck.level;
@@ -340,6 +395,28 @@ void Renderer::renderDeck(Deck& deck, int64_t frame, int frames) {
         const float wet = deck.delayWet.at((frame + n) / sr);
         mixLeft_[n] += dl * wet;
         mixRight_[n] += dr * wet;
+      }
+      if (reverbOn) {
+        // Phase 3 Task 4: the reverb gesture — per-block convolution with the
+        // synthetic IR. The post-filter tap (same as delay) feeds a history
+        // buffer; each output sample is the dot product of the IR and the
+        // recent history. The dry path never passes through it; the wet is
+        // added with its own envelope. reverbSeconds 0 lands here zero times.
+        const int histPos = deck.reverbHistPos;
+        deck.reverbHistLeft[histPos] = l;
+        deck.reverbHistRight[histPos] = r;
+
+        float convL = 0.f, convR = 0.f;
+        for (int k = 0; k < deck.reverbIRSize; ++k) {
+          const int idx = (histPos - k + deck.reverbIRSize) % deck.reverbIRSize;
+          convL += deck.reverbIRLeft[k] * deck.reverbHistLeft[idx];
+          convR += deck.reverbIRRight[k] * deck.reverbHistRight[idx];
+        }
+
+        deck.reverbHistPos = histPos + 1 == deck.reverbIRSize ? 0 : histPos + 1;
+        const float wet = deck.reverbWet.at((frame + n) / sr);
+        mixLeft_[n] += convL * wet;
+        mixRight_[n] += convR * wet;
       }
       mixLeft_[n] += l * g;
       mixRight_[n] += r * g;

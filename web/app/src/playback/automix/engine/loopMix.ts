@@ -24,6 +24,17 @@ import { DELAY_AIR_BEATS } from './policy';
 export const LOOP_BARS = 4;
 /** Loop lengths tried, longest first: a 1-bar instrumental loop beats a 4-bar one with a word in it. */
 const LOOP_LENGTHS = [4, 2, 1] as const;
+
+/** Phase 3 Task 6: max loop repetitions before degrading to a short blend (stuck needle cap). */
+export const LOOP_MAX_REPETITIONS = 12;
+/** Phase 3 Task 6: max |log(fold * stretch_ratio)| before degrading to a short blend.
+ *  Signalsmith stretch artifacts become audible when the total ratio (fold × stretch)
+ *  strays beyond ~e^0.5 ≈ 1.65× or ~e^-0.5 ≈ 0.61×. Without fold (fold=1), the
+ *  stretch window 0.9..1.25 already guarantees |log(ratio)| ≤ log(1.25) ≈ 0.223.
+ *  This cap catches the folded cases where a 2× or 0.5× fold combines with stretch
+ *  to push the total ratio into the artifact zone. */
+export const LOOP_MAX_TOTAL_LOG_RATIO = 0.5;
+
 /** Bars the incoming loop takes to come in at the outgoing tempo. */
 const ENTER_BARS = 4;
 /** Bars the outgoing loop takes to drain away once the tempo has arrived. */
@@ -179,6 +190,20 @@ export function planLoopMix(
   // the incoming loop lets go only at its own loop boundary: round the mix up to whole incoming loops
   const inLoopOutBars = inPick.bars / fold;
   const totalBars = Math.ceil((ENTER_BARS + rampBars + EXIT_BARS) / inLoopOutBars) * inLoopOutBars;
+
+  // Phase 3 Task 6: repetition cap — a 2-bar loop repeated more than 12 times
+  // is the "stuck needle" case. Degrade to a short blend (4 bars).
+  const totalReps = totalBars / outPick.bars;
+  if (totalReps > LOOP_MAX_REPETITIONS) {
+    return refuse?.(`loop repetition cap: ${totalReps.toFixed(1)} reps > ${LOOP_MAX_REPETITIONS}`) ?? null;
+  }
+
+  // Phase 3 Task 6: fold+stretch artifact cap — total |log(fold * stretch_ratio)|
+  const stretchRatio = target / outBpm; // = inBpm / (fold * outBpm)
+  const totalLogRatio = Math.abs(Math.log(fold * stretchRatio));
+  if (totalLogRatio > LOOP_MAX_TOTAL_LOG_RATIO) {
+    return refuse?.(`loop artifact cap: |log(fold*stretch)| = ${totalLogRatio.toFixed(3)} > ${LOOP_MAX_TOTAL_LOG_RATIO}`) ?? null;
+  }
 
   const pick = (key: string, p: Clean, beatSec: number, bpm: number): LoopPick => ({
     key,
@@ -347,7 +372,7 @@ function rms(buffer: AudioBuffer, from: number, to: number, bufferOffsetSec = 0)
  * player needs: the handoff, and when and where the incoming element takes over.
  * [gesture] is the scorer's chosen delay ({ delaySec } from scoreDelayGesture):
  * the throw rides the outgoing deck's final beats and dies at the release,
- * before the incoming element's handover — null keeps the wet silent.
+ * before the incoming element's handover inherits it. Null keeps the wet silent.
  */
 export function scheduleLoopMix(plan: LoopMixPlan, outDeck: LoopDeck, inDeck: LoopDeck, t0: number, inGainComp = 1, gesture: { delaySec: number } | null = null): LoopMixTimes {
   const { out, in: inn, fold } = plan;

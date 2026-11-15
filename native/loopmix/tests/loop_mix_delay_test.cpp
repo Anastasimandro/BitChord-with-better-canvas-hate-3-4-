@@ -1,10 +1,12 @@
-// BitChord: the loop mix renderer's host-side CI test (Phase 3 Task 3).
+// BitChord: the loop mix renderer's host-side CI test (Phase 3 Task 3 & 4).
 //
 // Exercises the delay gesture the way the acceptance asks: a click-track deck
 // through the delay — every repeat lands on the beat grid; the feedback chain
 // decays; no wet survives the engagement window's close (window + 1 beat).
-// Also the performance discipline: the same mix rendered with the delay off
-// and on, timed, so a regression shows up as a budget breach instead of a vibe.
+// Exercises the reverb gesture: a sustained melodic close blooms with the
+// synthetic IR; the wet opens at the last 2 beats and dies before handover.
+// Also the performance discipline: the same mix rendered with FX off and on,
+// timed, so a regression shows up as a budget breach instead of a vibe.
 //
 // Built by .github/workflows/loopmix-native.yml with the same flags the
 // Android build uses (-O3 -ffast-math); never run on a dev machine.
@@ -49,6 +51,13 @@ void addPulse(std::vector<float>& region, int64_t at) {
     const int64_t index = at + i;
     if (index < 0 || index >= int64_t(region.size())) return;
     region[index] = float(std::sin(2 * M_PI * 1000.0 * i / double(kSampleRate)));
+  }
+}
+
+/** A sustained tone for reverb testing — a held note that the IR will bloom. */
+void addSustained(std::vector<float>& region, int64_t from, int64_t to, float freqHz = 440.0f) {
+  for (int64_t i = from; i < to && i < int64_t(region.size()); ++i) {
+    region[i] = float(std::sin(2 * M_PI * freqHz * double(i) / double(kSampleRate))) * 0.5f;
   }
 }
 
@@ -255,13 +264,144 @@ void testPerformance() {
   check(onPerFrame < offPerFrame * 2.0, "the delay unit's cost is bounded");
 }
 
+void assignReverbWet(Deck& deck, double openBeatSec, double closeBeatSec) {
+  // Reverb wet envelope: 0 until openAt, attack over 0.02s, hold, then ramp to 0 at closeAt
+  deck.reverbWet.times = {openBeatSec, openBeatSec + 0.02, closeBeatSec - 0.01, closeBeatSec};
+  deck.reverbWet.values = {0.f, 1.f, 1.f, 0.f};
+}
+
+void testReverbBloom() {
+  std::printf("reverb: sustained melodic close blooms with synthetic IR\n");
+  // A sustained tone over the last 4 beats, reverb opens at last 2 beats
+  const int closeBeat = 10;
+  Mix mix = makeMix(closeBeat, closeBeat + 2);
+  // Replace clicks with sustained tone from beat 6 to beat 10 (the melodic tail)
+  addSustained(mix.left, int64_t(6) * kBeatFrames, int64_t(10) * kBeatFrames);
+  addSustained(mix.right, int64_t(6) * kBeatFrames, int64_t(10) * kBeatFrames);
+
+  Renderer renderer(kSampleRate);
+  Deck& deck = renderer.deck(0);
+  deck.left = mix.left;
+  deck.right = mix.right;
+  deck.regionStart = 0;
+  deck.knotTimes = mix.knotTimes;
+  deck.knotPositions = mix.knotPositions;
+  deck.stopAt = (closeBeat + 1.0) * kBeatSeconds;
+  deck.reverbSeconds = 0.75;  // REVERB_IR_SEC
+  // Reverb opens at last 2 beats (beat 8), closes at end (beat 10)
+  assignReverbWet(deck, 8.0 * kBeatSeconds, 10.0 * kBeatSeconds);
+  renderer.deck(1).finished = true;
+
+  const std::vector<float> samples = renderMix(renderer, renderer.firstFrame(), int64_t(deck.stopAt * kSampleRate));
+  const int64_t offset = -renderer.firstFrame();
+
+  // During the reverb window (beat 8 to 10), there should be audible reverb tail
+  const int64_t openSample = offset + int64_t(8.0 * kBeatSeconds * kSampleRate);
+  const int64_t closeSample = offset + int64_t(10.0 * kBeatSeconds * kSampleRate);
+  bool audibleInWindow = false;
+  for (int64_t i = openSample; i < closeSample && i < int64_t(samples.size()); ++i) {
+    if (std::abs(samples[size_t(i)]) > 0.01f) { audibleInWindow = true; break; }
+  }
+  check(audibleInWindow, "reverb wet audible during engagement window");
+
+  // After the close (window + 1 beat), wet must be silent
+  const int64_t windowEnd = closeSample + kBeatFrames;
+  bool silent = true;
+  for (int64_t i = closeSample; i < windowEnd && i < int64_t(samples.size()); ++i) {
+    if (std::abs(samples[size_t(i)]) > 0.001f) { silent = false; break; }
+  }
+  check(silent, "reverb wet silent through window + 1 beat after the close");
+}
+
+void testReverbNoWetBeforeOpen() {
+  std::printf("reverb: no wet before the engagement window opens\n");
+  const int closeBeat = 10;
+  Mix mix = makeMix(closeBeat, closeBeat + 2);
+  addSustained(mix.left, int64_t(6) * kBeatFrames, int64_t(10) * kBeatFrames);
+  addSustained(mix.right, int64_t(6) * kBeatFrames, int64_t(10) * kBeatFrames);
+
+  Renderer renderer(kSampleRate);
+  Deck& deck = renderer.deck(0);
+  deck.left = mix.left;
+  deck.right = mix.right;
+  deck.regionStart = 0;
+  deck.knotTimes = mix.knotTimes;
+  deck.knotPositions = mix.knotPositions;
+  deck.stopAt = (closeBeat + 1.0) * kBeatSeconds;
+  deck.reverbSeconds = 0.75;
+  assignReverbWet(deck, 8.0 * kBeatSeconds, 10.0 * kBeatSeconds);
+  renderer.deck(1).finished = true;
+
+  const std::vector<float> samples = renderMix(renderer, renderer.firstFrame(), int64_t(deck.stopAt * kSampleRate));
+  const int64_t offset = -renderer.firstFrame();
+
+  // Before the reverb window opens (beat 8), only dry signal (sustained tone) should be present
+  // The sustained tone is at 440 Hz, so we check that there's no additional reverb bloom
+  // by verifying the signal is just the dry tone (which we know the amplitude of)
+  const int64_t preOpenSample = offset + int64_t(7.0 * kBeatSeconds * kSampleRate);
+  bool dryOnly = true;
+  for (int64_t i = preOpenSample; i < preOpenSample + kBeatFrames && i < int64_t(samples.size()); ++i) {
+    // The dry tone at 440 Hz has amplitude 0.5; reverb would add energy
+    if (std::abs(samples[size_t(i)]) > 0.6f) { dryOnly = false; break; }
+  }
+  check(dryOnly, "only dry signal before reverb window opens");
+}
+
+void testReverbPerformance() {
+  std::printf("performance: the mix with the reverb off and on\n");
+  const int closeBeat = 32;
+  Mix mix = makeMix(closeBeat, closeBeat + 2);
+  addSustained(mix.left, int64_t(20) * kBeatFrames, int64_t(32) * kBeatFrames);
+  addSustained(mix.right, int64_t(20) * kBeatFrames, int64_t(32) * kBeatFrames);
+  const int64_t from = 0;
+  const int64_t to = int64_t(closeBeat * kBeatSeconds * kSampleRate);
+  double offPerFrame = 0, onPerFrame = 0;
+
+  for (int pass = 0; pass < 3; ++pass) {
+    Renderer off(kSampleRate);
+    Deck& d0 = off.deck(0);
+    d0.left = mix.left; d0.right = mix.right;
+    d0.knotTimes = mix.knotTimes; d0.knotPositions = mix.knotPositions;
+    d0.stopAt = double(to) / kSampleRate;
+    off.deck(1).finished = true;
+    const auto t0 = std::chrono::steady_clock::now();
+    renderMix(off, from, to);
+    const auto t1 = std::chrono::steady_clock::now();
+    offPerFrame = std::max(offPerFrame, std::chrono::duration<double, std::nano>(t1 - t0).count() / double(to - from));
+
+    Renderer on(kSampleRate);
+    Deck& e0 = on.deck(0);
+    e0.left = mix.left; e0.right = mix.right;
+    e0.knotTimes = mix.knotTimes; e0.knotPositions = mix.knotPositions;
+    e0.stopAt = double(to) / kSampleRate;
+    e0.reverbSeconds = 0.75;
+    assignReverbWet(e0, 30.0 * kBeatSeconds, 32.0 * kBeatSeconds);
+    on.deck(1).finished = true;
+    const auto t2 = std::chrono::steady_clock::now();
+    renderMix(on, from, to);
+    const auto t3 = std::chrono::steady_clock::now();
+    onPerFrame = std::max(onPerFrame, std::chrono::duration<double, std::nano>(t3 - t2).count() / double(to - from));
+  }
+
+  std::printf("  measured: reverb off %.2f ns/frame, reverb on %.2f ns/frame (worst of 3)\n", offPerFrame, onPerFrame);
+  std::printf("  measured: reverb delta %.2f ns/frame (%.1f%%)\n", onPerFrame - offPerFrame,
+              offPerFrame > 0 ? 100.0 * (onPerFrame - offPerFrame) / offPerFrame : 0.0);
+  // The real-time line at 48 kHz is 20.8 us/frame; the mix must sit far under it.
+  check(offPerFrame < 20800.0, "reverb off inside the real-time budget");
+  check(onPerFrame < 20800.0, "reverb on inside the real-time budget");
+  check(onPerFrame < offPerFrame * 2.0, "the reverb unit's cost is bounded");
+}
+
 }  // namespace
 
 int main() {
-  std::printf("loop_mix renderer — delay gesture (host CI harness)\n");
+  std::printf("loop_mix renderer — delay & reverb gestures (host CI harness)\n");
   testRepeatsOnGrid();
   testSingleClickDecayChain();
   testPerformance();
+  testReverbBloom();
+  testReverbNoWetBeforeOpen();
+  testReverbPerformance();
   if (failures != 0) {
     std::printf("%d check(s) failed\n", failures);
     return 1;

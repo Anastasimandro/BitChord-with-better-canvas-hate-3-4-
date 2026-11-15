@@ -162,11 +162,11 @@ private val MIX_OUT_TYPE_SCORE = mapOf(
 )
 
 /** Non-finite guards, matching the desktop planner's coercion of `NaN`/`Infinity` to zero. */
- fun Double.orZero(): Double = if (isFinite()) this else 0.0
+fun Double.orZero(): Double = if (isFinite()) this else 0.0
 
- fun Double?.orZero(): Double = if (this != null && isFinite()) this else 0.0
+fun Double?.orZero(): Double = if (this != null && isFinite()) this else 0.0
 
- fun clamp(value: Double, min: Double, max: Double): Double =
+fun clamp(value: Double, min: Double, max: Double): Double =
     if (value.isFinite()) max(min, min(max, value)) else min
 
 /**
@@ -340,7 +340,7 @@ fun audibleSecondsBetween(analysis: TrackAnalysis, start: Double, end: Double): 
  * grid, which silently overrides a measured `audibleStartTime` and tells the
  * planner the whole head of the track is intro it can fade across.
  */
- fun audibleStartOf(analysis: TrackAnalysis): Double {
+fun audibleStartOf(analysis: TrackAnalysis): Double {
     val firstBeat = analysis.firstBeat.takeIf { it.isFinite() && it > 0 }
     val candidates = listOfNotNull(analysis.audibleStartTime, analysis.pickupTime, firstBeat)
         .filter { it.isFinite() && it >= 0 }
@@ -348,7 +348,7 @@ fun audibleSecondsBetween(analysis: TrackAnalysis, start: Double, end: Double): 
 }
 
 /** The value in [values] closest to [target] within [tolerance], or null when none qualifies. */
- fun nearestValue(values: List<Double>, target: Double, tolerance: Double): Double? =
+fun nearestValue(values: List<Double>, target: Double, tolerance: Double): Double? =
     values.filter { it.isFinite() && abs(it - target) <= tolerance }
         .minByOrNull { abs(it - target) }
 
@@ -539,6 +539,8 @@ data class StyleGateResult(
     val passes: Boolean,
     val killReason: String?,
     val score: Double,
+    /** Phase 3 Task 5: why FILTER passed its gate - "two-kicks" | "impossible-tempo" | null. */
+    val filterGateReason: String? = null,
 )
 
 /** Input data needed to score a pair of tracks for all candidates. */
@@ -631,12 +633,20 @@ private fun evaluateCandidate(input: StyleScorerInput, candidate: StyleCandidate
             }
         }
         StyleCandidate.FILTER -> {
-            // FILTER is always available when grids exist but BLEND fails stretch or confidence
+            // Phase 3 Task 5: FILTER hard gate - requires two kicks at join OR impossible tempo
             val hasTwoKicks = (input.outLowEnergyAtJoin ?: 0.0) >= KICK_PRESENT && (input.inLowEnergyAtJoin ?: 0.0) >= KICK_PRESENT
             val impossibleTempo = input.stretchRatio < BLEND_STRETCH_MIN || input.stretchRatio > BLEND_STRETCH_MAX
-            val filterPenalty = if (hasTwoKicks || impossibleTempo) 0.0 else FILTER_PENALTY
-            val score = 0.3 * avgGridConf * (1 - filterPenalty) + input.energyContinuity * ENERGY_CONTINUITY_WEIGHT
-            StyleGateResult(candidate, true, null, score)
+            if (!hasTwoKicks && !impossibleTempo) {
+                // Hard gate: FILTER dies without two kicks or impossible tempo
+                StyleGateResult(candidate, false, "no-two-kicks", 0.0, null)
+            } else {
+                // FILTER passes: score without penalty
+                val score = 0.3 * avgGridConf + input.energyContinuity * ENERGY_CONTINUITY_WEIGHT
+                val gateReason = if (hasTwoKicks && !impossibleTempo) "two-kicks"
+                else if (impossibleTempo) "impossible-tempo"
+                else null
+                StyleGateResult(candidate, true, null, score, gateReason)
+            }
         }
     }
 }
@@ -660,6 +670,8 @@ data class StyleScoreResult(
     val gestureSeconds: Double,
     /** Phase 3: gestures considered and rejected, with reasons. */
     val rejectedGesturesAndWhy: List<Pair<String, String>>,
+    /** Phase 3 Task 5: why FILTER passed its gate - "two-kicks" | "impossible-tempo" | null. */
+    val filterGateReason: String?,
 )
 
 fun scoreStyles(input: StyleScorerInput): StyleScoreResult {
@@ -688,6 +700,7 @@ fun scoreStyles(input: StyleScorerInput): StyleScoreResult {
             gesture = gesture,
             gestureSeconds = gestureSeconds,
             rejectedGesturesAndWhy = rejectedGesturesAndWhy,
+            filterGateReason = null,
         )
     }
 
@@ -709,6 +722,13 @@ fun scoreStyles(input: StyleScorerInput): StyleScoreResult {
         bars >= 8 &&
         (input.residualDeltaLufs == null || abs(input.residualDeltaLufs!!) <= RESIDUAL_LUFS_BASS_SWAP_KILL_DB)
 
+    // Phase 3 Task 5: filterGateReason for overlap cap decision
+    val filterGateReason = if (best.candidate == StyleCandidate.FILTER) {
+        // Use the gateReason from the passing result if available
+        val gateResult = results.first { it.candidate == StyleCandidate.FILTER }
+        gateResult.filterGateReason
+    } else null
+
     return StyleScoreResult(
         style = best.candidate,
         score = best.score,
@@ -719,6 +739,7 @@ fun scoreStyles(input: StyleScorerInput): StyleScoreResult {
         gesture = gesture,
         gestureSeconds = gestureSeconds,
         rejectedGesturesAndWhy = rejectedGesturesAndWhy,
+        filterGateReason = filterGateReason,
     )
 }
 

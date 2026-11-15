@@ -15,5 +15,9 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "fixtures": "node scripts/capture-fixtures.mjs"
+  },
+  "devDependencies": {
+    "happy-dom": "^21.0.4",
+    "vitest": "^5.1.0"
   }
 }

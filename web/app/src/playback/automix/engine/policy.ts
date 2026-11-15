@@ -12,6 +12,7 @@
 // to its own peak and a curve normalized to the track's read the same.
 
 import type { TrackAnalysis, VocalWindow } from '../analysis/types';
+import { REVERB_IR_SEC } from './loopDeck';
 
 /** Vocal activity threshold — same scale as the phone's 0.25. */
 export const VOCAL_ACTIVE = 0.25;
@@ -414,16 +415,27 @@ function evaluateCandidate(input: StyleScorerInput, candidate: MixStyleCandidate
     return { candidate, passes: true, killReason: null, score };
   }
 
-  // FILTER gates
+  // FILTER gates — hard gate: requires two kicks at join OR impossible tempo
   if (candidate === 'filter') {
-    // FILTER is always available when grids exist but BLEND fails stretch or confidence
-    // Gratuitous FILTER penalty unless two kicks at join or impossible tempo
     const hasTwoKicks = (input.outLowEnergyAtJoin ?? 0) >= KICK_PRESENT && (input.inLowEnergyAtJoin ?? 0) >= KICK_PRESENT;
     const impossibleTempo = stretchRatio < BLEND_STRETCH_MIN || stretchRatio > BLEND_STRETCH_MAX;
-    const filterPenalty = (hasTwoKicks || impossibleTempo) ? 0 : FILTER_PENALTY;
 
-    // FILTER score: lower ambition, but gets penalty for gratuitous use
-    const score = 0.3 * avgGridConf * (1 - filterPenalty) + energyContinuity * ENERGY_CONTINUITY_WEIGHT;
+    // Hard gate: FILTER dies without two kicks or impossible tempo
+    if (!hasTwoKicks && !impossibleTempo) {
+      return { candidate, passes: false, killReason: 'no-two-kicks', score: 0 };
+    }
+    if (!impossibleTempo && hasTwoKicks) {
+      // Two-kick filter: record the reason for telemetry (caps overlap at 4 bars)
+      // This is a pass — the killReason stays null for passing candidates
+    }
+    if (impossibleTempo && !hasTwoKicks) {
+      // Impossible-tempo filter: record the reason for telemetry
+    }
+
+    // FILTER score: lower ambition. Gratuitous (two-kick) filter gets a penalty;
+    // impossible-tempo filter does not.
+    const gratuitousFilter = hasTwoKicks && !impossibleTempo;
+    const score = 1.1 * avgGridConf + energyContinuity * ENERGY_CONTINUITY_WEIGHT - (gratuitousFilter ? FILTER_PENALTY : 0);
     return { candidate, passes: true, killReason: null, score };
   }
 
@@ -436,7 +448,7 @@ function evaluateCandidate(input: StyleScorerInput, candidate: MixStyleCandidate
  *
  * Pure function: no state, no clock, no randomness.
  *
- * @returns { style, score, killReason, bars, bassSwapAllowed, vocalOverlapCapBars, gesture }
+ * @returns { style, score, killReason, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, filterGateReason }
  */
 export function scoreStyles(input: StyleScorerInput): {
   /** The chosen style. */
@@ -457,15 +469,52 @@ export function scoreStyles(input: StyleScorerInput): {
   gestureSeconds: number;
   /** Phase 3: gestures considered and rejected, with reasons. */
   rejectedGesturesAndWhy: { gesture: 'none' | 'delay' | 'reverb' | 'both'; reason: string }[];
+  /** Phase 3 Task 5: why FILTER passed its gate — 'two-kicks' | 'impossible-tempo' | null. */
+  filterGateReason: 'two-kicks' | 'impossible-tempo' | null;
 } {
   // Phase 3 Task 2: the delay is a scorer decision with a recorded reason —
-  // no default path adds it. Reverb has no scorer yet (task 4); its absence
-  // stays implicit in the 'none'.
+  // no default path adds it.
   const delayDecision = scoreDelayGesture({ out: input.out, outGridConf: input.outGridConf });
-  const gesture: 'none' | 'delay' | 'reverb' | 'both' = delayDecision.chosen ? 'delay' : 'none';
-  const gestureSeconds = delayDecision.chosen ? delayDecision.delaySec ?? 0 : 0;
-  const rejectedGesturesAndWhy: { gesture: 'none' | 'delay' | 'reverb' | 'both'; reason: string }[] =
-    delayDecision.chosen ? [] : [{ gesture: 'delay', reason: delayDecision.killReason ?? 'unknown' }];
+  // Phase 3 Task 4: the reverb is a scorer decision for melodic-sustained closes.
+  const reverbDecision = scoreReverbGesture({ out: input.out, outGridConf: input.outGridConf });
+
+  // Gesture selection: delay and reverb are mutually exclusive by default,
+  // 'both' only when the join has air AND rhythmic tail AND scorer records why.
+  let gesture: 'none' | 'delay' | 'reverb' | 'both' = 'none';
+  let gestureSeconds = 0;
+  const rejectedGesturesAndWhy: { gesture: 'none' | 'delay' | 'reverb' | 'both'; reason: string }[] = [];
+
+  const delayChosen = delayDecision.chosen;
+  const reverbChosen = reverbDecision.chosen;
+
+  if (delayChosen && reverbChosen) {
+    // Both chosen: this is the rare 'both' case — requires air (delay) AND
+    // sustained tail (reverb). The scorer records why.
+    gesture = 'both';
+    gestureSeconds = (delayDecision.delaySec ?? 0) + (reverbDecision.reverbSec ?? 0);
+    rejectedGesturesAndWhy.push(
+      { gesture: 'none', reason: 'both chosen: air present and sustained melodic tail' }
+    );
+  } else if (delayChosen) {
+    gesture = 'delay';
+    gestureSeconds = delayDecision.delaySec ?? 0;
+    rejectedGesturesAndWhy.push(
+      { gesture: 'reverb', reason: reverbDecision.killReason ?? 'not a sustained melodic close' }
+    );
+  } else if (reverbChosen) {
+    gesture = 'reverb';
+    gestureSeconds = reverbDecision.reverbSec ?? 0;
+    rejectedGesturesAndWhy.push(
+      { gesture: 'delay', reason: delayDecision.killReason ?? 'no air in the close' }
+    );
+  } else {
+    gesture = 'none';
+    gestureSeconds = 0;
+    rejectedGesturesAndWhy.push(
+      { gesture: 'delay', reason: delayDecision.killReason ?? 'unknown' },
+      { gesture: 'reverb', reason: reverbDecision.killReason ?? 'unknown' }
+    );
+  }
 
   const candidates: MixStyleCandidate[] = ['loop', 'blend', 'filter', 'fade', 'gap'];
   const results = candidates.map((c) => evaluateCandidate(input, c));
@@ -485,6 +534,7 @@ export function scoreStyles(input: StyleScorerInput): {
       gesture,
       gestureSeconds,
       rejectedGesturesAndWhy,
+      filterGateReason: null,
     };
   }
 
@@ -513,6 +563,15 @@ export function scoreStyles(input: StyleScorerInput): {
     bars >= 8 &&
     (input.residualDeltaLufs === null || Math.abs(input.residualDeltaLufs) <= RESIDUAL_LUFS_BASS_SWAP_KILL_DB);
 
+  // Filter gate reason: why FILTER passed (for overlap cap decision)
+  let filterGateReason: 'two-kicks' | 'impossible-tempo' | null = null;
+  if (best.candidate === 'filter') {
+    const hasTwoKicks = (input.outLowEnergyAtJoin ?? 0) >= KICK_PRESENT && (input.inLowEnergyAtJoin ?? 0) >= KICK_PRESENT;
+    const impossibleTempo = input.stretchRatio < BLEND_STRETCH_MIN || input.stretchRatio > BLEND_STRETCH_MAX;
+    if (hasTwoKicks && !impossibleTempo) filterGateReason = 'two-kicks';
+    else if (impossibleTempo) filterGateReason = 'impossible-tempo';
+  }
+
   return {
     style: best.candidate,
     score: best.score,
@@ -525,6 +584,7 @@ export function scoreStyles(input: StyleScorerInput): {
     gesture,
     gestureSeconds,
     rejectedGesturesAndWhy,
+    filterGateReason,
   };
 }
 
@@ -681,4 +741,79 @@ export function scoreDelayGesture(input: { out: TrackAnalysis; outGridConf: numb
     return no('sustained melodic close — reverb territory, not delay');
   }
   return { chosen: true, delaySec: beatSec, killReason: null };
+}
+
+// ============================================================================
+// Phase 3 Task 4 — Short Reverb Gesture (the choice, never a default)
+// ============================================================================
+
+/**
+ * The reverb blooms the outgoing track's melodic-sustained close. It is a
+ * CHOSEN gesture, never default: it fits only a close with HIGH ENERGY
+ * CONTINUITY and LOW RHYTHMIC CONTENT in the last ~4 beats — the exact
+ * complement of the delay's test. A rhythmic close with a drop (air) is
+ * delay territory; a sustained melodic tail (no air, smooth energy) is reverb
+ * territory. Thresholds are relative to the tail view's own spread.
+ */
+/** A melodic close needs a trusted grid for the reverb timing to land clean. */
+export const REVERB_MIN_GRID_CONFIDENCE = 0.55;
+/** The melodic tail is measured over the outgoing track's last ~4 beats. */
+export const REVERB_TAIL_BEATS = 4;
+/** The tail's energy continuity: adjacent frames must not jump more than this share of typical. */
+export const REVERB_CONTINUITY_MAX_JUMP = 0.4;
+/** The tail's mean energy over the last REVERB_TAIL_BEATS must be at least this share of typical. */
+export const REVERB_SUSTAIN_MIN_SHARE = 0.25;
+
+export interface ReverbGestureDecision {
+  chosen: boolean;
+  /** The IR length in seconds (gestureReverbSec). */
+  reverbSec: number | null;
+  /** The gate that killed the candidate, or null when chosen. */
+  killReason: string | null;
+}
+
+/**
+ * The reverb gesture's gates, as a pure function over the outgoing analysis.
+ * Every rejection carries its killReason for the event telemetry; nothing is
+ * filtered, only recorded.
+ */
+export function scoreReverbGesture(input: { out: TrackAnalysis; outGridConf: number }): ReverbGestureDecision {
+  const out = input.out;
+  const no = (reason: string): ReverbGestureDecision => ({ chosen: false, reverbSec: null, killReason: reason });
+  if (out.beatIntervalSec === null || !Number.isFinite(out.beatIntervalSec) || out.beatIntervalSec <= 0) {
+    return no('no outgoing beat grid for reverb timing');
+  }
+  if (input.outGridConf < REVERB_MIN_GRID_CONFIDENCE) {
+    return no(`outgoing grid confidence ${input.outGridConf.toFixed(2)} < ${REVERB_MIN_GRID_CONFIDENCE}`);
+  }
+  const beatSec = out.beatIntervalSec;
+  const tail = tailView(out, GAP_TAIL_SEC) ?? wholeView(out);
+  if (!tail || !tail.curve.length) return no('no energy evidence at the outgoing close');
+  const typical = percentile(tail.curve, 0.6);
+  if (typical <= 0) return no('no energy evidence at the outgoing close');
+  const duration = Math.min(out.durationSec, tail.endSec);
+  const tailWindow = REVERB_TAIL_BEATS * beatSec;
+  const startIdx = Math.max(0, Math.ceil((duration - tailWindow - tail.startSec) / tail.windowSec));
+  const endIdx = Math.min(tail.curve.length, Math.floor((duration - tail.startSec) / tail.windowSec));
+  if (endIdx - startIdx < 2) return no('not enough energy frames in the tail window');
+  // Check energy continuity: adjacent frames should not jump abruptly (rhythmic)
+  let maxJump = 0;
+  let sum = 0;
+  let prev = tail.curve[startIdx]!;
+  for (let i = startIdx + 1; i < endIdx; i++) {
+    const curr = tail.curve[i]!;
+    const jump = Math.abs(curr - prev) / Math.max(0.01, typical);
+    if (jump > maxJump) maxJump = jump;
+    sum += curr;
+    prev = curr;
+  }
+  const mean = sum / (endIdx - startIdx);
+  if (maxJump > REVERB_CONTINUITY_MAX_JUMP) {
+    return no('rhythmic content in the tail — delay territory, not reverb');
+  }
+  // Sustained energy: the tail must not be too quiet (that's air/silence)
+  if (mean < typical * REVERB_SUSTAIN_MIN_SHARE) {
+    return no('tail too quiet — air or silence, not a sustained melodic close');
+  }
+  return { chosen: true, reverbSec: REVERB_IR_SEC, killReason: null };
 }
