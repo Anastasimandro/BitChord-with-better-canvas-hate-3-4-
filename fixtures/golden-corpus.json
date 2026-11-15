@@ -1096,8 +1096,8 @@
                       "expected":  {
                                        "style":  "blend",
                                        "entryBeatB":  1,
-                                       "overlapBars":  8,
-                                       "bassSwapBeat":  4,
+                                       "overlapBars":  16,
+                                       "bassSwapBeat":  12,
                                        "gesture":  "none",
                                        "reason":  null
                                    }
