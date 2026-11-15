@@ -20,10 +20,10 @@ class GoldenCorpusTest {
 
     private data class Fixture(
         val version: Int,
-        val pairs: List<Pair>
+        val pairs: List<CorpusPair>
     )
 
-    private data class Pair(
+    private data class CorpusPair(
         val id: String,
         val category: String,
         val trackA: TrackFixture,
@@ -102,7 +102,7 @@ class GoldenCorpusTest {
             val expected = pair.expected
 
             val diff = diffExpectedVsProduced(expected, produced)
-            val pass = matchesExpected(expected, produced, analysisA.beatInterval)
+            val pass = matchesExpected(expected, produced, trackA.beatInterval)
 
             if (pass) {
                 println("✓ $testName")
