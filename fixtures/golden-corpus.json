@@ -1581,9 +1581,9 @@
                                  },
                       "expected":  {
                                        "style":  "blend",
-                                       "entryBeatB":  3,
-                                       "overlapBars":  8,
-                                       "bassSwapBeat":  4,
+                                       "entryBeatB":  1,
+                                       "overlapBars":  4,
+                                       "bassSwapBeat":  2,
                                        "gesture":  "none",
                                        "reason":  "next song has no beat grid"
                                    }
