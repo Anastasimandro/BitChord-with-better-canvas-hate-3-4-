@@ -93,9 +93,9 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
-      - name: Pre-build to trigger android-37.0 auto-install
+      - name: Pre-build to trigger android-37.0 auto-install (compile task)
         run: |
-          ./gradlew :app:dependencies --no-daemon -Dandroid.autoInstallSdk=true
+          ./gradlew :app:compileDevDebugAndroidTestJavaWithJavac --no-daemon -Dandroid.autoInstallSdk=true || true
 
       - name: Fix android-37 platform directory (copy android-37.0 to android-37)
         run: |
@@ -203,9 +203,9 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
-      - name: Pre-build to trigger android-37.0 auto-install
+      - name: Pre-build to trigger android-37.0 auto-install (compile task)
         run: |
-          ./gradlew :app:dependencies --no-daemon -Dandroid.autoInstallSdk=true
+          ./gradlew :app:compileDevDebugAndroidTestJavaWithJavac --no-daemon -Dandroid.autoInstallSdk=true || true
 
       - name: Fix android-37 platform directory (copy android-37.0 to android-37)
         run: |
@@ -313,9 +313,9 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
-      - name: Pre-build to trigger android-37.0 auto-install
+      - name: Pre-build to trigger android-37.0 auto-install (compile task)
         run: |
-          ./gradlew :app:dependencies --no-daemon -Dandroid.autoInstallSdk=true
+          ./gradlew :app:compileDevDebugAndroidTestJavaWithJavac --no-daemon -Dandroid.autoInstallSdk=true || true
 
       - name: Fix android-37 platform directory (copy android-37.0 to android-37)
         run: |
