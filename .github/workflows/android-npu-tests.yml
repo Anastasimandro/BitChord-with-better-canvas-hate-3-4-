@@ -69,25 +69,25 @@ jobs:
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
 
-      - name: Install Android SDK components (API 30, x86_64 system image)
+      - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Create android-37 platform directory (Gradle looks for android-37, not android-37.0)
+      - name: Fix android-37 platform directory
         run: |
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
             cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Copied android-37.0 -> android-37"
-            printf "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\n" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for android-37"
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed android-37 platform directory"
           elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Directory android-37 already exists"
-            printf "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\n" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for android-37"
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed source.properties for existing android-37"
           else
-            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            echo "WARNING: android-37.0 not found"
             ls -la /opt/android-sdk/platforms/
           fi
 
@@ -175,25 +175,25 @@ jobs:
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
 
-      - name: Install Android SDK components (API 30, x86_64 system image)
+      - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Create android-37 platform directory (Gradle looks for android-37, not android-37.0)
+      - name: Fix android-37 platform directory
         run: |
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
             cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Copied android-37.0 -> android-37"
-            printf "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\n" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for android-37"
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed android-37 platform directory"
           elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Directory android-37 already exists"
-            printf "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\n" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for android-37"
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed source.properties for existing android-37"
           else
-            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            echo "WARNING: android-37.0 not found"
             ls -la /opt/android-sdk/platforms/
           fi
 
@@ -281,25 +281,25 @@ jobs:
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
 
-      - name: Install Android SDK components (API 30, x86_64 system image)
+      - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Create android-37 platform directory (Gradle looks for android-37, not android-37.0)
+      - name: Fix android-37 platform directory
         run: |
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
             cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Copied android-37.0 -> android-37"
-            printf "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\n" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for android-37"
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed android-37 platform directory"
           elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Directory android-37 already exists"
-            printf "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\n" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for android-37"
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed source.properties for existing android-37"
           else
-            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            echo "WARNING: android-37.0 not found"
             ls -la /opt/android-sdk/platforms/
           fi
 
