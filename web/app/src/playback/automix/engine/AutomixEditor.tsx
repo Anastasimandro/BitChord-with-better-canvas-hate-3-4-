@@ -1190,4 +1190,4 @@ function computeBars(plan: TransitionPlan, out: TrackAnalysis | null, inn: Track
   return Math.round(plan.durationSec / barSec);
 }
 
-export default AutomixEditor;
+export default AutomixEditor;"// CI trigger"  
