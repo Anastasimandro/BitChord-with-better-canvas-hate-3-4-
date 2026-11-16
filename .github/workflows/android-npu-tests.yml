@@ -29,7 +29,6 @@ jobs:
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
       ANDROID_AVD_HOME: /home/runner/.config/.android/avd
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,12 +39,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
 
       - name: Cache Android SDK
         id: cache-android-sdk
@@ -96,14 +89,6 @@ jobs:
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
           timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
-
-      - name: Pre-install: trigger Gradle platform install
-        run: |
-          ./gradlew :app:dependencies --no-daemon || true
-
-      - name: Create android-37 symlink
-        run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Parity Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
@@ -126,7 +111,6 @@ jobs:
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
       ANDROID_AVD_HOME: /home/runner/.config/.android/avd
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -137,12 +121,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
 
       - name: Cache Android SDK
         id: cache-android-sdk
@@ -193,14 +171,6 @@ jobs:
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
           timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
-
-      - name: Pre-install: trigger Gradle platform install
-        run: |
-          ./gradlew :app:dependencies --no-daemon || true
-
-      - name: Create android-37 symlink
-        run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Benchmark Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
@@ -223,7 +193,6 @@ jobs:
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
       ANDROID_AVD_HOME: /home/runner/.config/.android/avd
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -234,12 +203,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
 
       - name: Cache Android SDK
         id: cache-android-sdk
@@ -290,14 +253,6 @@ jobs:
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
           timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
-
-      - name: Pre-install: trigger Gradle platform install
-        run: |
-          ./gradlew :app:dependencies --no-daemon || true
-
-      - name: Create android-37 symlink
-        run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Check delegate availability
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
