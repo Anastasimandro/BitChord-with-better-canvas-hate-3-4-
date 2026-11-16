@@ -9,6 +9,7 @@ on:
       - 'app/src/androidTest/java/com/music/bitchord/playback/smart/BeatTrackerBenchmarkTest.kt'
       - '.github/workflows/android-npu-tests.yml'
   pull_request:
+    branches: [main]
     paths:
       - 'shared/src/jvmSharedMain/kotlin/com/music/bitchord/playback/smart/BeatTracker.kt'
       - 'app/src/androidTest/java/com/music/bitchord/playback/smart/BeatTrackerNpuParityTest.kt'
@@ -71,47 +72,31 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          # Install components needed for the build: compileSdk=34 (Android 14), NDK, Build-Tools 35
-          # Note: compileSdk=37 in build.gradle.kts requires preview platform; install from canary channel
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
 
       - name: Enable KVM for x86_64 emulator
         run: |
-          # GitHub Actions runners have KVM but the user isn't in the kvm group by default
           sudo usermod -a -G kvm $USER
-          # Verify KVM access
           ls -la /dev/kvm
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
-          # Verify AVD was created
           avdmanager list avd
-          # Fix AVD config: the AVD stores the system image path at creation time.
-          # On GitHub Actions, avdmanager may resolve the system image to a relative path
-          # or the default SDK location. Set the absolute path to our custom SDK.
           AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
           if [ -f "$AVD_CONFIG" ]; then
-            # Replace any relative or default SDK path with our custom SDK absolute path
             sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
-          # Start emulator in background with kvm group (required for x86_64 hardware acceleration)
-          # Use 'sg kvm' to run with the kvm group membership from usermod
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install and create android-37 symlink
         run: |
-          # Trigger Gradle to auto-install the compileSdk platform (android-37.0)
           ./gradlew :app:dependencies --no-daemon || true
-          # Create symlink android-37 -> android-37.0 so Gradle finds the platform
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink: android-37 -> android-37.0"
@@ -185,47 +170,31 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          # Install components needed for the build: compileSdk=34 (Android 14), NDK, Build-Tools 35
-          # Note: compileSdk=37 in build.gradle.kts requires preview platform; install from canary channel
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
 
       - name: Enable KVM for x86_64 emulator
         run: |
-          # GitHub Actions runners have KVM but the user isn't in the kvm group by default
           sudo usermod -a -G kvm $USER
-          # Verify KVM access
           ls -la /dev/kvm
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
-          # Verify AVD was created
           avdmanager list avd
-          # Fix AVD config: the AVD stores the system image path at creation time.
-          # On GitHub Actions, avdmanager may resolve the system image to a relative path
-          # or the default SDK location. Set the absolute path to our custom SDK.
           AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
           if [ -f "$AVD_CONFIG" ]; then
-            # Replace any relative or default SDK path with our custom SDK absolute path
             sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
-          # Start emulator in background with kvm group (required for x86_64 hardware acceleration)
-          # Use 'sg kvm' to run with the kvm group membership from usermod
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install and create android-37 symlink
         run: |
-          # Trigger Gradle to auto-install the compileSdk platform (android-37.0)
           ./gradlew :app:dependencies --no-daemon || true
-          # Create symlink android-37 -> android-37.0 so Gradle finds the platform
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink: android-37 -> android-37.0"
@@ -299,47 +268,31 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          # Install components needed for the build: compileSdk=34 (Android 14), NDK, Build-Tools 35
-          # Note: compileSdk=37 in build.gradle.kts requires preview platform; install from canary channel
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
 
       - name: Enable KVM for x86_64 emulator
         run: |
-          # GitHub Actions runners have KVM but the user isn't in the kvm group by default
           sudo usermod -a -G kvm $USER
-          # Verify KVM access
           ls -la /dev/kvm
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
-          # Verify AVD was created
           avdmanager list avd
-          # Fix AVD config: the AVD stores the system image path at creation time.
-          # On GitHub Actions, avdmanager may resolve the system image to a relative path
-          # or the default SDK location. Set the absolute path to our custom SDK.
           AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
           if [ -f "$AVD_CONFIG" ]; then
-            # Replace any relative or default SDK path with our custom SDK absolute path
             sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
-          # Start emulator in background with kvm group (required for x86_64 hardware acceleration)
-          # Use 'sg kvm' to run with the kvm group membership from usermod
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install and create android-37 symlink
         run: |
-          # Trigger Gradle to auto-install the compileSdk platform (android-37.0)
           ./gradlew :app:dependencies --no-daemon || true
-          # Create symlink android-37 -> android-37.0 so Gradle finds the platform
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink: android-37 -> android-37.0"
