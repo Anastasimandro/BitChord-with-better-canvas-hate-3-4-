@@ -98,12 +98,7 @@ jobs:
         run: ./gradlew :app:dependencies --no-daemon || true
 
       - name: Create android-37 symlink
-        run: |
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink: android-37 -> android-37.0"
-          fi
-          ls -la /opt/android-sdk/platforms/
+        run: test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Parity Test
         run: |
@@ -198,12 +193,7 @@ jobs:
         run: ./gradlew :app:dependencies --no-daemon || true
 
       - name: Create android-37 symlink
-        run: |
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink: android-37 -> android-37.0"
-          fi
-          ls -la /opt/android-sdk/platforms/
+        run: test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Benchmark Test
         run: |
@@ -298,12 +288,7 @@ jobs:
         run: ./gradlew :app:dependencies --no-daemon || true
 
       - name: Create android-37 symlink
-        run: |
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink: android-37 -> android-37.0"
-          fi
-          ls -la /opt/android-sdk/platforms/
+        run: test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Check delegate availability
         run: |
