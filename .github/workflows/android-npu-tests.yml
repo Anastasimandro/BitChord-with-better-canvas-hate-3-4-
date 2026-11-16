@@ -24,6 +24,9 @@ jobs:
     name: NPU Delegate Parity Test
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      ANDROID_AVD_HOME: /home/runner/.config/.android/avd
 
     steps:
       - name: Checkout repository
@@ -54,14 +57,12 @@ jobs:
       - name: Install Android SDK (if not cached)
         if: steps.cache-android-sdk.outputs.cache-hit != 'true'
         run: |
-          ANDROID_SDK_ROOT=/opt/android-sdk
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           cd $ANDROID_SDK_ROOT/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
           unzip -q cmdline-tools.zip
           mv cmdline-tools latest
           rm cmdline-tools.zip
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
@@ -77,9 +78,6 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
-          # Set ANDROID_AVD_HOME to where avdmanager creates AVDs (/home/runner/.config/.android/avd)
-          # Emulator searches in $ANDROID_AVD_HOME, $ANDROID_SDK_HOME/avd, $HOME/.android/avd
-          export ANDROID_AVD_HOME=/home/runner/.config/.android/avd
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -106,6 +104,9 @@ jobs:
     name: NPU Delegate Benchmark (Cold L0)
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      ANDROID_AVD_HOME: /home/runner/.config/.android/avd
 
     steps:
       - name: Checkout repository
@@ -136,14 +137,12 @@ jobs:
       - name: Install Android SDK (if not cached)
         if: steps.cache-android-sdk.outputs.cache-hit != 'true'
         run: |
-          ANDROID_SDK_ROOT=/opt/android-sdk
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           cd $ANDROID_SDK_ROOT/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
           unzip -q cmdline-tools.zip
           mv cmdline-tools latest
           rm cmdline-tools.zip
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
@@ -159,9 +158,6 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
-          # Set ANDROID_AVD_HOME to where avdmanager creates AVDs (/home/runner/.config/.android/avd)
-          # Emulator searches in $ANDROID_AVD_HOME, $ANDROID_SDK_HOME/avd, $HOME/.android/avd
-          export ANDROID_AVD_HOME=/home/runner/.config/.android/avd
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -188,6 +184,9 @@ jobs:
     name: NPU Delegate Availability Check
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      ANDROID_AVD_HOME: /home/runner/.config/.android/avd
 
     steps:
       - name: Checkout repository
@@ -218,14 +217,12 @@ jobs:
       - name: Install Android SDK (if not cached)
         if: steps.cache-android-sdk.outputs.cache-hit != 'true'
         run: |
-          ANDROID_SDK_ROOT=/opt/android-sdk
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           cd $ANDROID_SDK_ROOT/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
           unzip -q cmdline-tools.zip
           mv cmdline-tools latest
           rm cmdline-tools.zip
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
@@ -241,9 +238,6 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
-          # Set ANDROID_AVD_HOME to where avdmanager creates AVDs (/home/runner/.config/.android/avd)
-          # Emulator searches in $ANDROID_AVD_HOME, $ANDROID_SDK_HOME/avd, $HOME/.android/avd
-          export ANDROID_AVD_HOME=/home/runner/.config/.android/avd
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
