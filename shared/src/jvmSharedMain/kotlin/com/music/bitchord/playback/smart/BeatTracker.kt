@@ -100,9 +100,11 @@ class BeatTracker(
             session?.takeIf { sessionThreads == threads && sessionDelegate == delegate }?.let { return it }
             runCatching { session?.close() }
             session = null
+            var file: File? = null
+            var options: OrtSession.SessionOptions? = null
             return runCatching {
-                val file = File(modelPath())
-                val options = OrtSession.SessionOptions().apply {
+                file = File(modelPath())
+                options = OrtSession.SessionOptions().apply {
                     setIntraOpNumThreads(threads)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                     // ORT's arena allocator keeps every block it has ever needed, which for this
@@ -117,7 +119,7 @@ class BeatTracker(
                         configureDelegate(options, delegate)
                     }
                 }
-                val created = OrtEnvironment.getEnvironment().createSession(file.absolutePath, options)
+                val created = OrtEnvironment.getEnvironment().createSession(file!!.absolutePath, options!!)
                     .also {
                         session = it
                         sessionThreads = threads
@@ -131,7 +133,7 @@ class BeatTracker(
                 // Fallback to CPU if delegate creation failed
                 if (delegate != null) {
                     activeDelegate = null
-                    createCpuSession(file, threads)
+                    createCpuSession(file!!, threads)
                 } else {
                     throw e
                 }
@@ -459,44 +461,44 @@ class BeatTracker(
             val strength = 1 / (1 + exp(-(median(peakLogits) - 0.5)))
             return max(0.0, min(0.95, 0.35 + 0.4 * regular + 0.25 * strength))
         }
-    }
 
-    /**
-     * Creates a BeatTracker configured for testing with a specific delegate.
-     *
-     * This is used by the golden corpus test to verify NPU delegate parity with CPU.
-     * The model path is resolved from the test fixture directory.
-     */
-    @JvmStatic
-    fun forTest(
-        modelPath: String,
-        preferredDelegate: NpuDelegate? = null,
-        forceCpu: Boolean = false,
-        threads: Int = 1,
-    ): BeatTracker {
-        return BeatTracker(
-            modelPath = { modelPath },
-            inferenceThreads = { threads },
-            preferredDelegate = preferredDelegate,
-            forceCpu = { forceCpu },
-        )
-    }
+        /**
+         * Creates a BeatTracker configured for testing with a specific delegate.
+         *
+         * This is used by the golden corpus test to verify NPU delegate parity with CPU.
+         * The model path is resolved from the test fixture directory.
+         */
+        @JvmStatic
+        fun forTest(
+            modelPath: String,
+            preferredDelegate: NpuDelegate? = null,
+            forceCpu: Boolean = false,
+            threads: Int = 1,
+        ): BeatTracker {
+            return BeatTracker(
+                modelPath = { modelPath },
+                inferenceThreads = { threads },
+                preferredDelegate = preferredDelegate,
+                forceCpu = { forceCpu },
+            )
+        }
 
-    /**
-     * Checks which NPU delegates are available on the current platform.
-     * Returns a map of delegate -> available.
-     */
-    @JvmStatic
-    fun checkAvailableDelegates(modelPath: String, threads: Int = 1): Map<NpuDelegate, Boolean> {
-        val tracker = BeatTracker(
-            modelPath = { modelPath },
-            inferenceThreads = { threads },
-            preferredDelegate = null,
-            forceCpu = { true },
-        )
-        return mapOf(
-            NpuDelegate.NNAPI to tracker.checkDelegateAvailability(NpuDelegate.NNAPI, threads),
-            NpuDelegate.QNN to tracker.checkDelegateAvailability(NpuDelegate.QNN, threads),
-        ).also { tracker.release() }
+        /**
+         * Checks which NPU delegates are available on the current platform.
+         * Returns a map of delegate -> available.
+         */
+        @JvmStatic
+        fun checkAvailableDelegates(modelPath: String, threads: Int = 1): Map<NpuDelegate, Boolean> {
+            val tracker = BeatTracker(
+                modelPath = { modelPath },
+                inferenceThreads = { threads },
+                preferredDelegate = null,
+                forceCpu = { true },
+            )
+            return mapOf(
+                NpuDelegate.NNAPI to tracker.checkDelegateAvailability(NpuDelegate.NNAPI, threads),
+                NpuDelegate.QNN to tracker.checkDelegateAvailability(NpuDelegate.QNN, threads),
+            ).also { tracker.release() }
+        }
     }
 }
