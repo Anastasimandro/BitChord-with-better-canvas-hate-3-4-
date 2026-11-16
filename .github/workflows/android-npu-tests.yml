@@ -42,19 +42,16 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK (API 30)
-        uses: android-actions/setup-android@v2
-        with:
-          api-level: 30
-          ndk-version: r26d
+      - name: Install Android SDK components (API 30, x86_64 system image)
+        run: |
+          # Use pre-installed Android SDK
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          # Create AVD
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
-          # Start emulator in background
           $ANDROID_HOME/emulator/emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
-          # Wait for boot
           adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
           adb shell input keyevent 82
 
@@ -96,11 +93,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK (API 30)
-        uses: android-actions/setup-android@v2
-        with:
-          api-level: 30
-          ndk-version: r26d
+      - name: Install Android SDK components (API 30, x86_64 system image)
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
@@ -147,11 +143,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK (API 30)
-        uses: android-actions/setup-android@v2
-        with:
-          api-level: 30
-          ndk-version: r26d
+      - name: Install Android SDK components (API 30, x86_64 system image)
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
