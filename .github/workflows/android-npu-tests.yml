@@ -321,4 +321,4 @@ jobs:
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
 
       - name: Print delegate availability
-        run: find app/build/outputs/androidTest-results -name "*.xml" -exec grep -l "Delegate availability" {} \;"# Force workflow refresh"  
+        run: find app/build/outputs/androidTest-results -name "*.xml" -exec grep -l "Delegate availability" {} \;
