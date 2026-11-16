@@ -42,19 +42,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK and start emulator (API 30, x86_64 for NNAPI)
         uses: android-actions/setup-android@v3
         with:
           api-level: 30
           emulator: true
-          ndk-version: r26d
-
-      - name: Start emulator (API 30, x86_64 for NNAPI support)
-        uses: android-actions/start-emulator@v2
-        with:
-          api-level: 30
           arch: x86_64
-          force-avd-creation: true
+          ndk-version: r26d
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max
 
       - name: Wait for emulator
@@ -100,19 +94,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK and start emulator (API 30, x86_64 for NNAPI)
         uses: android-actions/setup-android@v3
         with:
           api-level: 30
           emulator: true
-          ndk-version: r26d
-
-      - name: Start emulator (API 30, x86_64 for NNAPI support)
-        uses: android-actions/start-emulator@v2
-        with:
-          api-level: 30
           arch: x86_64
-          force-avd-creation: true
+          ndk-version: r26d
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max
 
       - name: Wait for emulator
@@ -158,19 +146,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK and start emulator (API 30, x86_64 for NNAPI)
         uses: android-actions/setup-android@v3
         with:
           api-level: 30
           emulator: true
-          ndk-version: r26d
-
-      - name: Start emulator (API 30, x86_64 for NNAPI support)
-        uses: android-actions/start-emulator@v2
-        with:
-          api-level: 30
           arch: x86_64
-          force-avd-creation: true
+          ndk-version: r26d
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max
 
       - name: Wait for emulator
@@ -186,5 +168,4 @@ jobs:
 
       - name: Print delegate availability
         run: |
-          # The test prints delegate availability to stdout; we capture it from the test results
           find app/build/outputs/androidTest-results -name "*.xml" -exec grep -l "Delegate availability" {} \;
