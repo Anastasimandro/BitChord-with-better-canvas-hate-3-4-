@@ -42,13 +42,18 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK and start emulator (API 30, x86_64 for NNAPI)
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK (API 30)
+        uses: android-actions/setup-android@v2
         with:
           api-level: 30
-          emulator: true
-          arch: x86_64
           ndk-version: r26d
+
+      - name: Create and start emulator (x86_64 for NNAPI)
+        uses: android-actions/start-emulator@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max
 
       - name: Wait for emulator
@@ -94,13 +99,18 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK and start emulator (API 30, x86_64 for NNAPI)
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK (API 30)
+        uses: android-actions/setup-android@v2
         with:
           api-level: 30
-          emulator: true
-          arch: x86_64
           ndk-version: r26d
+
+      - name: Create and start emulator (x86_64 for NNAPI)
+        uses: android-actions/start-emulator@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max
 
       - name: Wait for emulator
@@ -146,13 +156,18 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK and start emulator (API 30, x86_64 for NNAPI)
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK (API 30)
+        uses: android-actions/setup-android@v2
         with:
           api-level: 30
-          emulator: true
-          arch: x86_64
           ndk-version: r26d
+
+      - name: Create and start emulator (x86_64 for NNAPI)
+        uses: android-actions/start-emulator@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max
 
       - name: Wait for emulator
