@@ -127,6 +127,7 @@ jobs:
         run: |
           ./gradlew :app:connectedDevDebugAndroidTest \
             -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest \
+            -Dandroid.autoInstallSdk=false \
             --no-daemon
 
       - name: Upload test results
@@ -245,6 +246,7 @@ jobs:
         run: |
           ./gradlew :app:connectedDevDebugAndroidTest \
             -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest \
+            -Dandroid.autoInstallSdk=false \
             --no-daemon
 
       - name: Upload benchmark results
@@ -363,6 +365,7 @@ jobs:
         run: |
           ./gradlew :app:connectedDevDebugAndroidTest \
             -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity \
+            -Dandroid.autoInstallSdk=false \
             --no-daemon
 
       - name: Print delegate availability
