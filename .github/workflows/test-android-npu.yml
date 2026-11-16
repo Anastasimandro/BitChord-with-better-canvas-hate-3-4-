@@ -1,4 +1,4 @@
-name: Test Android NPU With SDK Install
+name: Test Android NPU With Emulator
 on:
   push:
     branches: [main]
@@ -58,6 +58,19 @@ jobs:
         run: |
           sudo usermod -a -G kvm $USER
           ls -la /dev/kvm
+      - name: Create and start emulator
+        run: |
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          avdmanager list avd
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
+          nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb shell input keyevent 82
       - name: Test
         run: echo "hello"
 
@@ -107,6 +120,19 @@ jobs:
         run: |
           sudo usermod -a -G kvm $USER
           ls -la /dev/kvm
+      - name: Create and start emulator
+        run: |
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          avdmanager list avd
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
+          nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb shell input keyevent 82
       - name: Test
         run: echo "hello"
 
@@ -156,5 +182,18 @@ jobs:
         run: |
           sudo usermod -a -G kvm $USER
           ls -la /dev/kvm
+      - name: Create and start emulator
+        run: |
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          avdmanager list avd
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
+          nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb shell input keyevent 82
       - name: Test
         run: echo "hello"
