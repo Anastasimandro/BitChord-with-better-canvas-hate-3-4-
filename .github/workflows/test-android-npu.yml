@@ -1,4 +1,4 @@
-name: Test Android NPU Three Jobs
+name: Test Android NPU With SDK Install
 on:
   push:
     branches: [main]
@@ -29,6 +29,35 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
+      - name: Cache Android SDK
+        id: cache-android-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
+      - name: Install Android SDK (if not cached)
+        if: steps.cache-android-sdk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          sdkmanager --channel=3 "platforms;android-37" || true
+      - name: Enable KVM
+        run: |
+          sudo usermod -a -G kvm $USER
+          ls -la /dev/kvm
       - name: Test
         run: echo "hello"
 
@@ -49,6 +78,35 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
+      - name: Cache Android SDK
+        id: cache-android-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
+      - name: Install Android SDK (if not cached)
+        if: steps.cache-android-sdk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          sdkmanager --channel=3 "platforms;android-37" || true
+      - name: Enable KVM
+        run: |
+          sudo usermod -a -G kvm $USER
+          ls -la /dev/kvm
       - name: Test
         run: echo "hello"
 
@@ -69,5 +127,34 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
+      - name: Cache Android SDK
+        id: cache-android-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
+      - name: Install Android SDK (if not cached)
+        if: steps.cache-android-sdk.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          sdkmanager --channel=3 "platforms;android-37" || true
+      - name: Enable KVM
+        run: |
+          sudo usermod -a -G kvm $USER
+          ls -la /dev/kvm
       - name: Test
         run: echo "hello"
