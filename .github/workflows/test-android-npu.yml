@@ -71,7 +71,7 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
       - name: Test
         run: echo "hello"
@@ -97,7 +97,7 @@ jobs:
         id: cache-android-sdk
         uses: actions/cache@v4
         with:
-          path: /opt/android-sdk
+          path: /android-sdk
           key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
           restore-keys: |
             android-sdk-${{ runner.os }}-
@@ -135,7 +135,7 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
       - name: Test
         run: echo "hello"
@@ -199,7 +199,7 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
       - name: Test
         run: echo "hello"

@@ -91,7 +91,7 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
@@ -184,11 +184,11 @@ jobs:
           AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
           if [ -f "$AVD_CONFIG" ]; then
             sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
-            echo "Updated AVD config:"
+            echo "_updated AVD config:"
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
@@ -285,7 +285,7 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
