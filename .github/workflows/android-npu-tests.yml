@@ -73,7 +73,11 @@ jobs:
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
+          # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          # Verify AVD was created
+          avdmanager list avd
+          # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
@@ -148,7 +152,11 @@ jobs:
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
+          # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          # Verify AVD was created
+          avdmanager list avd
+          # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
@@ -223,7 +231,11 @@ jobs:
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
+          # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          # Verify AVD was created
+          avdmanager list avd
+          # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
