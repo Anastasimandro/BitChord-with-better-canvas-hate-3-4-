@@ -78,6 +78,16 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
+          # Fix AVD config: the AVD stores the system image path at creation time.
+          # On GitHub Actions, avdmanager may resolve the system image to the default
+          # SDK location (/usr/local/lib/android/sdk) instead of our custom SDK (/opt/android-sdk).
+          # Update config.ini to point to the correct system image path.
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            sed -i 's|/usr/local/lib/android/sdk|/opt/android-sdk|g' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -158,6 +168,16 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
+          # Fix AVD config: the AVD stores the system image path at creation time.
+          # On GitHub Actions, avdmanager may resolve the system image to the default
+          # SDK location (/usr/local/lib/android/sdk) instead of our custom SDK (/opt/android-sdk).
+          # Update config.ini to point to the correct system image path.
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            sed -i 's|/usr/local/lib/android/sdk|/opt/android-sdk|g' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -238,6 +258,16 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
+          # Fix AVD config: the AVD stores the system image path at creation time.
+          # On GitHub Actions, avdmanager may resolve the system image to the default
+          # SDK location (/usr/local/lib/android/sdk) instead of our custom SDK (/opt/android-sdk).
+          # Update config.ini to point to the correct system image path.
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            sed -i 's|/usr/local/lib/android/sdk|/opt/android-sdk|g' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
