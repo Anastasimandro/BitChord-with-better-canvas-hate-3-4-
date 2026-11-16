@@ -50,7 +50,7 @@ jobs:
           ndk-version: r26d
 
       - name: Start emulator (API 30, x86_64 for NNAPI support)
-        uses: android-actions/start-emulator@v3
+        uses: android-actions/start-emulator@v2
         with:
           api-level: 30
           arch: x86_64
@@ -108,7 +108,7 @@ jobs:
           ndk-version: r26d
 
       - name: Start emulator (API 30, x86_64 for NNAPI support)
-        uses: android-actions/start-emulator@v3
+        uses: android-actions/start-emulator@v2
         with:
           api-level: 30
           arch: x86_64
@@ -166,7 +166,7 @@ jobs:
           ndk-version: r26d
 
       - name: Start emulator (API 30, x86_64 for NNAPI support)
-        uses: android-actions/start-emulator@v3
+        uses: android-actions/start-emulator@v2
         with:
           api-level: 30
           arch: x86_64
