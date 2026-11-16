@@ -45,7 +45,9 @@ export interface VocalWindow {
   source?: 'model' | 'cheap';
 }
 
-/** BitChord, Phase 1: RMS energy over one edge window: curve[i] is at startSec + i * windowSec. */
+/**
+ * BitChord, Phase 1: RMS energy over one edge window: curve[i] is at startSec + i * windowSec.
+ */
 export interface EnergySpan {
   startSec: number;
   windowSec: number;
@@ -59,6 +61,41 @@ export interface LocalGrid {
   beatIntervalSec: number;
   firstDownbeatSec: number;
   gridConfidence: number;
+}
+
+/**
+ * BitChord, Phase 4 Task A2: 2-stem separation over one overlap window.
+ * The stem window covers the exact overlap span the transition plans to use.
+ * vocals + accompaniment = full mix (within model fidelity).
+ */
+export interface StemWindow {
+  /** Track time the window starts at (the overlap start for this track). */
+  startSec: number;
+  /** Frames per second of the stem curves (model-dependent, ~44.1 kHz / hop). */
+  fps: number;
+  /** Vocal stem curve: 0..1 per frame, averaged over vocal band. */
+  vocals: number[];
+  /** Accompaniment stem curve: 0..1 per frame, averaged over full band. */
+  accompaniment: number[];
+  /** Hash of the span (trackId + overlap window params) for cache invalidation. */
+  spanHash: string;
+  /** Which 2-stem model produced this separation. */
+  model: 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix';
+  /** Quality metric: vocals SDR in dB (negative = below threshold). */
+  qualitySdrDb: number;
+}
+
+/**
+ * BitChord, Phase 4 Task A2: stems for both sides of a transition.
+ * One entry per track (outgoing and incoming), each with its own spanHash.
+ */
+export interface Stems {
+  /** Outgoing track's stem window (mix-out overlap window). */
+  out: StemWindow | null;
+  /** Incoming track's stem window (mix-in overlap window). */
+  in: StemWindow | null;
+  /** The span hash that identifies this stem pair — used for cache lookup. */
+  spanHash: string;
 }
 
 export interface TrackAnalysis {
@@ -135,9 +172,27 @@ export interface TrackAnalysis {
   gridVersion?: number;
   vocalVersion?: number;
   miscVersion?: number;
+  /** BitChord, Automix 2.0 Phase 4 Task A2: stem component version. */
+  stemVersion?: number;
   manualOverrides?: {
+    /** User-known tempo corrects the grid. Applied BEFORE scoring. */
     bpm?: number;
-    camelot?: CamelotKey;
+    /** User-known key corrects/overrides. Applied BEFORE scoring. */
+    camelot?: string; // "8A", "12B" etc.
+    /** Shifts B's head-grid alignment by N beats. Applied BEFORE scoring. */
     gridNudgeBeats?: number;
+    /** Forces plan fields; unspecified stay scorer-decided. */
+    planOverride?: {
+      /** Forces the transition style; gates do NOT kill a forced style. Includes 'crossfade' for plain fallback. */
+      style?: 'blend' | 'filter' | 'fade' | 'gap' | 'crossfade' | 'loop';
+      /** Replaces the scorer's entry beat output (1 = first downbeat). */
+      entryBeat?: number;
+      /** Replaces the scorer's overlap bars output. */
+      overlapBars?: number;
+      /** Replaces the scorer's gesture output. */
+      gesture?: 'none' | 'delay' | 'reverb' | 'both';
+    };
   };
+  /** BitChord, Automix 2.0 Phase 4 Task A2: 2-stem separation for the overlap window. */
+  stems?: Stems | null;
 }

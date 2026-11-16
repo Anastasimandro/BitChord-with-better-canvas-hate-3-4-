@@ -9,7 +9,7 @@
 // rung by rung:
 //
 // - L0 (critical path, when the track joins the coming pair): ONE edge —
-//   Beat This! over it, the edge's LUFS, its coarse energy span, and from
+//   Beat This! over it, the edge's integrated LUFS, its coarse energy span, and from
 //   the tail span the silence trim and the false-ending rule. L0 alone
 //   plans a valid blend/filter/fade/gap.
 // - L1 (>90 s of the outgoing track left): the edge spans re-windowed at
@@ -19,6 +19,9 @@
 //   grade): the cheap vocal detector over the overlap windows.
 // - L3 (idle, cancellable): the whole track — key, whole-curve energy,
 //   whole-track LUFS, open-unmix — into the cache for later sessions.
+// - L3 (stem, idle/on-demand): the overlap window — 2-stem separation
+//   (vocals + accompaniment) for the exact span the transition plans to use.
+//   Cached per (trackId, span hash) with stemVersion. NEVER on the critical path.
 //
 // Nothing invalidates wholesale: each component carries its version
 // (components.ts) and a cached record is adopted component by component.
@@ -26,14 +29,14 @@ import { trackLog } from '@/playback/trackLog';
 import { getAnalysis, putAnalysis } from '../db';
 import { fetchTrackAudio, fetchTrackAudioEdge, type TrackAudio } from '../fetchAudio';
 import type { AnalyzeRequest, AnalyzeResponse } from './analysis.worker';
-import { BEAT_SR, VOCAL_WINDOW_SEC } from './models';
-import { GRID_VERSION, VOCAL_VERSION, adoptCached, needsLevel3 } from './components';
-import type { TrackAnalysis, TrackTags, VocalWindow } from './types';
+import { BEAT_SR, VOCAL_WINDOW_SEC, STEM_FPS } from './models';
+import { GRID_VERSION, VOCAL_VERSION, MISC_VERSION, STEM_VERSION, adoptCached, needsLevel3, needsStem } from './components';
+import type { TrackAnalysis, TrackTags, VocalWindow, StemWindow, Stems } from './types';
 import { ANALYSIS_VERSION } from './types';
 
 export type AnalysisStatus = 'pending' | 'analyzing' | 'done' | 'error';
-/** The ladder's rungs. L0/L1/L2 are edge-scoped; L3 is the whole track. */
-export type AnalysisLevel = 0 | 1 | 2 | 3;
+/** The ladder's rungs. L0/L1/L2 are edge-scoped; L3 is the whole track; stem is overlap-scoped. */
+export type AnalysisLevel = 0 | 1 | 2 | 3 | 'stem';
 
 /** A failed analysis is asked for again after this long. */
 const RETRY_FAILED_MS = 60_000;
@@ -70,7 +73,7 @@ class Analyzer {
   private readonly status = new Map<string, AnalysisStatus>();
   private readonly listeners = new Set<() => void>();
   private readonly failedAt = new Map<string, number>();
-  /** Rungs already landed (or finally failed), per track: "0:head", "1:tail", "2", "3". */
+  /** Rungs already landed (or finally failed), per track: "0:head", "1:tail", "2", "3", "stem:spanHash". */
   private readonly done = new Map<string, Set<string>>();
   /** Which tracks the mix loop still cares about; anything else is dropped from the queue. */
   private activeKeys = new Set<string>();
@@ -161,7 +164,7 @@ class Analyzer {
   }
 
   /**
-   * Asks for [videoId] to be analyzed to [level] (edge-scoped for 0-2).
+   * Asks for [videoId] to be analyzed to [level] (edge-scoped for 0-2, stem for overlap).
    * A cached record resolves at once for the rungs it already holds;
    * `urgent` puts the rung ahead of its level's queue (the playing and
    * next tracks outrank prefetch).
@@ -170,7 +173,7 @@ class Analyzer {
     videoId: string,
     tags: TrackTags,
     level: AnalysisLevel,
-    opts: { urgent?: boolean; edge?: 'head' | 'tail' } = {},
+    opts: { urgent?: boolean; edge?: 'head' | 'tail'; spanHash?: string; stemModel?: 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix' } = {},
   ): void {
     const known = this.status.get(videoId);
     if (known === 'analyzing') return;
@@ -178,7 +181,7 @@ class Analyzer {
     if (known === 'error' && Date.now() - (this.failedAt.get(videoId) ?? 0) < RETRY_FAILED_MS) return;
 
     const record = this.results.get(videoId);
-    if (record && this.rungDone(videoId, level, opts.edge)) return;
+    if (record && this.rungDone(videoId, level, opts.edge, opts.spanHash)) return;
 
     // The cached record is looked up once; until it lands, the record here
     // is whatever earlier rungs merged this session.
@@ -188,11 +191,13 @@ class Analyzer {
         if (cached && !this.results.has(videoId)) {
           this.merge(videoId, adoptCached(cached), { persisted: true });
         }
-        this.drainSatisfied(videoId, level, opts.edge);
+        this.drainSatisfied(videoId, level, opts.edge, opts.spanHash);
       });
     }
 
-    const at = this.queue.findIndex((q) => q.videoId === videoId && q.level === level && q.edge === opts.edge);
+    const at = this.queue.findIndex((q) =>
+      q.videoId === videoId && q.level === level && q.edge === opts.edge && q.spanHash === opts.spanHash,
+    );
     if (at >= 0) {
       if (opts.urgent) {
         const [entry] = this.queue.splice(at, 1);
@@ -200,7 +205,16 @@ class Analyzer {
       }
       return;
     }
-    this.queue.push({ videoId, tags, level, edge: opts.edge, urgent: opts.urgent ?? false, seq: this.seq++ });
+    this.queue.push({
+      videoId,
+      tags,
+      level,
+      edge: opts.edge,
+      spanHash: opts.spanHash,
+      stemModel: opts.stemModel,
+      urgent: opts.urgent ?? false,
+      seq: this.seq++,
+    });
     void this.run();
   }
 
@@ -218,13 +232,36 @@ class Analyzer {
   }
 
   /**
-   * Resolves when [level] (edge-scoped for 0-2) of [videoId] has landed, or
-   * after [timeoutMs] — the loop mix's bounded wait for vocal evidence.
+   * Request stem analysis for a specific overlap window.
+   * Called by the planner when it's about to score a BLEND with vocalOverlap > 0.15.
+   * Runs at L3/idle or on-demand — NEVER on the critical path.
    */
-  whenLevel(videoId: string, level: AnalysisLevel, edge: 'head' | 'tail' | undefined, timeoutMs: number): Promise<void> {
-    if (this.rungDone(videoId, level, edge)) return Promise.resolve();
+  requestStem(
+    videoId: string,
+    tags: TrackTags,
+    spanHash: string,
+    edge: 'head' | 'tail',
+    opts: { urgent?: boolean; stemModel?: 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix' } = {},
+  ): void {
+    const record = this.results.get(videoId);
+    if (record && !needsStem(record, spanHash)) return;
+    this.request(videoId, tags, 'stem', { ...opts, edge, spanHash });
+  }
+
+  /**
+   * Resolves when [level] (edge-scoped for 0-2, stem for overlap) of [videoId]
+   * has landed, or after [timeoutMs] — the loop mix's bounded wait for stem evidence.
+   */
+  whenLevel(
+    videoId: string,
+    level: AnalysisLevel,
+    edge: 'head' | 'tail' | undefined,
+    timeoutMs: number,
+    spanHash?: string,
+  ): Promise<void> {
+    if (this.rungDone(videoId, level, edge, spanHash)) return Promise.resolve();
     return new Promise((resolve) => {
-      const key = rungKey(videoId, level, edge);
+      const key = rungKey(videoId, level, edge, spanHash);
       const set = this.waiters.get(key) ?? new Set();
       set.add(resolve);
       this.waiters.set(key, set);
@@ -235,18 +272,20 @@ class Analyzer {
     });
   }
 
-  private rungDone(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail'): boolean {
-    return this.done.get(videoId)?.has(rungKey(videoId, level, edge)) ?? false;
+  private rungDone(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail', spanHash?: string): boolean {
+    return this.done.get(videoId)?.has(rungKey(videoId, level, edge, spanHash)) ?? false;
   }
 
-  private drainSatisfied(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail'): void {
-    if (!this.rungDone(videoId, level, edge)) return;
-    this.queue = this.queue.filter((q) => !(q.videoId === videoId && q.level === level && q.edge === edge));
-    this.resolveWaiters(videoId, level, edge);
+  private drainSatisfied(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail', spanHash?: string): void {
+    if (!this.rungDone(videoId, level, edge, spanHash)) return;
+    this.queue = this.queue.filter((q) =>
+      !(q.videoId === videoId && q.level === level && q.edge === edge && q.spanHash === spanHash),
+    );
+    this.resolveWaiters(videoId, level, edge, spanHash);
   }
 
-  private resolveWaiters(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail'): void {
-    const key = rungKey(videoId, level, edge);
+  private resolveWaiters(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail', spanHash?: string): void {
+    const key = rungKey(videoId, level, edge, spanHash);
     const waiting = this.waiters.get(key);
     if (!waiting) return;
     this.waiters.delete(key);
@@ -286,7 +325,7 @@ class Analyzer {
       }
       const entry = this.queue.splice(at, 1)[0]!;
       if (!this.wanted(entry)) continue;
-      if (this.rungDone(entry.videoId, entry.level, entry.edge)) continue;
+      if (this.rungDone(entry.videoId, entry.level, entry.edge, entry.spanHash)) continue;
       this.setStatus(entry.videoId, 'analyzing');
       const started = performance.now();
       try {
@@ -294,7 +333,7 @@ class Analyzer {
         this.merge(entry.videoId, fields, { persisted: true, tags: entry.tags });
         this.markDone(entry);
         trackLog.i(
-          `automix L${entry.level}${entry.edge ? `:${entry.edge}` : ''} of ${entry.videoId} in ${Math.round(performance.now() - started)}ms`,
+          `automix L${entry.level}${entry.edge ? `:${entry.edge}` : ''}${entry.spanHash ? `:${entry.spanHash}` : ''} of ${entry.videoId} in ${Math.round(performance.now() - started)}ms`,
           entry.videoId,
         );
         this.setStatus(entry.videoId, this.rungDone(entry.videoId, 3) ? 'done' : 'pending');
@@ -319,7 +358,10 @@ class Analyzer {
       }
       const b = this.queue[best]!;
       if (q.level !== b.level) {
-        if (q.level < b.level) best = i;
+        // stem level goes after L3 (idle priority)
+        const qPri = q.level === 'stem' ? 4 : q.level;
+        const bPri = b.level === 'stem' ? 4 : b.level;
+        if (qPri < bPri) best = i;
       } else if (q.urgent !== b.urgent) {
         if (q.urgent) best = i;
       } else if (q.seq < b.seq) best = i;
@@ -334,9 +376,9 @@ class Analyzer {
 
   private markDone(entry: QueueEntry): void {
     const set = this.done.get(entry.videoId) ?? new Set();
-    set.add(rungKey(entry.videoId, entry.level, entry.edge));
+    set.add(rungKey(entry.videoId, entry.level, entry.edge, entry.spanHash));
     this.done.set(entry.videoId, set);
-    this.resolveWaiters(entry.videoId, entry.level, entry.edge);
+    this.resolveWaiters(entry.videoId, entry.level, entry.edge, entry.spanHash);
   }
 
   private async analyzeEntry(entry: QueueEntry): Promise<Partial<TrackAnalysis>> {
@@ -345,6 +387,10 @@ class Analyzer {
       if (entry.level === 0) return this.analyzeEdgeL0(entry.videoId, entry.edge);
       if (entry.level === 1) return this.analyzeEdgeL1(entry.videoId, entry.edge);
       return this.analyzeEdgeL2(entry.videoId, entry.edge);
+    }
+    if (entry.level === 'stem') {
+      if (entry.edge === undefined || entry.spanHash === undefined) throw new Error('stem needs edge and spanHash');
+      return this.analyzeStem(entry.videoId, entry.edge, entry.spanHash, entry.stemModel ?? 'ht-demucs-ft');
     }
     return this.analyzeWholeL3(entry.videoId);
   }
@@ -487,6 +533,62 @@ class Analyzer {
     }).then((fields) => ({ ...fields, musicVideo: state.musicVideo }));
   }
 
+  /**
+   * L3 (stem): 2-stem separation over the overlap window.
+   * Fetches the exact overlap span for the given edge and runs the stem model.
+   * Runs at L3/idle or on-demand — NEVER on the critical path.
+   */
+  private async analyzeStem(
+    videoId: string,
+    edge: 'head' | 'tail',
+    spanHash: string,
+    stemModel: 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix',
+  ): Promise<Partial<TrackAnalysis>> {
+    // The overlap window for stems is the same as L2's window: ~60s tail / ~45s head
+    const state = await this.edgeState(videoId, edge);
+    const ctx = new OfflineAudioContext({ numberOfChannels: 1, length: 1, sampleRate: ANALYSIS_SR });
+    const buffer = await ctx.decodeAudioData(state.bytes.slice(0));
+    const durationSec = state.trackDurationSec > 0 ? state.trackDurationSec : buffer.duration;
+    const left = buffer.getChannelData(0);
+    const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+
+    let offsetSec: number;
+    let from: number;
+    let windowSec: number;
+    if (edge === 'head') {
+      // Incoming track: first ~45s (where it's mixed in)
+      offsetSec = 0;
+      from = 0;
+      windowSec = 45;
+    } else {
+      // Outgoing track: last ~60s (where it's mixed out)
+      if (state.fellBackToFull) {
+        offsetSec = Math.max(0, durationSec - EDGE_SEC);
+        from = Math.round(offsetSec * buffer.sampleRate);
+      } else {
+        const decodedSec = buffer.duration;
+        offsetSec = Math.max(0, durationSec - decodedSec);
+        from = 0;
+      }
+      windowSec = 60;
+    }
+    const to = Math.min(left.length, from + Math.round(windowSec * buffer.sampleRate));
+
+    return this.ask(videoId, {
+      type: 'analyze',
+      fileKey: videoId,
+      durationSec,
+      stemWindow: {
+        offsetSec,
+        left: copyForTransfer(left.slice(from, to)),
+        right: copyForTransfer(right.slice(from, to)),
+        spanHash,
+        edge,
+      },
+      stemModel,
+    });
+  }
+
   /** L3: the whole track — key, whole-curve energy, whole-track loudness, open-unmix — into the cache. */
   private async analyzeWholeL3(videoId: string): Promise<Partial<TrackAnalysis>> {
     const { bytes, musicVideo } = await this.trackAudio(videoId);
@@ -551,6 +653,7 @@ class Analyzer {
    * that need thought:
    * - energySpans: a new span replaces the one at its edge, never piles on.
    * - vocals: an open-unmix window replaces the cheap windows it covers.
+   * - stems: a stem window for one edge replaces that edge's stem, keyed by spanHash.
    * - the grid version stamps only when BOTH mixable edges have landed.
    */
   private merge(
@@ -619,6 +722,19 @@ class Analyzer {
       next.vocals = [...kept, ...fields.vocals];
     }
 
+    // stems: replace the edge's stem window for the given spanHash
+    if (fields.stems) {
+      const currentStems = next.stems ?? { out: null, in: null, spanHash: '' };
+      if (fields.stems.spanHash === currentStems.spanHash || currentStems.spanHash === '') {
+        // Same span or first stem — replace the relevant edge
+        if (fields.stems.out) currentStems.out = fields.stems.out;
+        if (fields.stems.in) currentStems.in = fields.stems.in;
+        currentStems.spanHash = fields.stems.spanHash;
+        next.stems = currentStems;
+      }
+      // Different spanHash — would need separate cache entry (not implemented here)
+    }
+
     // key
     if (fields.camelot !== undefined) next.camelot = fields.camelot;
     if (fields.keyName !== undefined) next.keyName = fields.keyName;
@@ -631,9 +747,26 @@ class Analyzer {
     }
     if (fields.vocalVersion !== undefined) next.vocalVersion = fields.vocalVersion;
     if (fields.miscVersion !== undefined) next.miscVersion = fields.miscVersion;
+    if (fields.stemVersion !== undefined) next.stemVersion = fields.stemVersion;
 
     this.results.set(videoId, next);
     if (opts.persisted && this.status.get(videoId) !== 'error') void putAnalysis(next);
+  }
+
+  /**
+   * Updates manualOverrides for a track and persists to IndexedDB.
+   * Called by the editor when user saves overrides.
+   */
+  async updateManualOverrides(
+    videoId: string,
+    overrides: TrackAnalysis['manualOverrides'],
+  ): Promise<void> {
+    const current = this.results.get(videoId);
+    if (!current) return;
+    const updated = { ...current, manualOverrides: overrides };
+    this.results.set(videoId, updated);
+    await putAnalysis(updated);
+    for (const l of this.listeners) l();
   }
 }
 
@@ -642,6 +775,8 @@ interface QueueEntry {
   tags: TrackTags;
   level: AnalysisLevel;
   edge?: 'head' | 'tail';
+  spanHash?: string;
+  stemModel?: 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix';
   urgent: boolean;
   seq: number;
 }
@@ -658,7 +793,8 @@ interface EdgeState {
   mono22?: Float32Array;
 }
 
-function rungKey(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail'): string {
+function rungKey(videoId: string, level: AnalysisLevel, edge?: 'head' | 'tail', spanHash?: string): string {
+  if (level === 'stem') return `${videoId}:stem:${edge}:${spanHash}`;
   return `${videoId}:${level}:${edge ?? '*'}`;
 }
 
@@ -692,6 +828,10 @@ function transferablesOf(request: AnalyzeRequest): ArrayBuffer[] {
   for (const w of request.vocalModelWindows ?? []) {
     push(w.left);
     push(w.right);
+  }
+  if (request.stemWindow) {
+    push(request.stemWindow.left);
+    push(request.stemWindow.right);
   }
   return out;
 }

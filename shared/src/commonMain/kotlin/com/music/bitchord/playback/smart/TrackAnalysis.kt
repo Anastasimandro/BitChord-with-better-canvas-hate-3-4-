@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Ported from Orchard (https://github.com/SFG5453/Orchard).
  *
  * Copyright (C) 2026 SFG545 (original Orchard implementation)
@@ -12,7 +12,7 @@
  *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
+ * MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
  * General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
@@ -23,6 +23,29 @@ package com.music.bitchord.playback.smart
 
 import kotlin.math.log10
 import kotlin.math.pow
+
+/**
+ * BitChord, Automix 2.0 Phase 4: manual overrides from the user.
+ * Keyed by track/pair IDs, not analysis version, so they survive re-analysis.
+ */
+data class ManualOverrides(
+    /** User-known tempo corrects the grid. */
+    val bpm: Double? = null,
+    /** User-known key corrects/overrides. */
+    val camelot: String? = null,
+    /** Shifts B's head-grid alignment by N beats. */
+    val gridNudgeBeats: Int? = null,
+    /** Forces plan fields; unspecified stay scorer-decided. */
+    val planOverride: PlanOverride? = null,
+)
+
+/** Forced plan fields from the user. Unspecified fields stay scorer-decided. */
+data class PlanOverride(
+    val style: String? = null,           // "EQUAL_POWER" | "DJ_BLEND" | "DJ_FILTER" | "GAPLESS"
+    val entryBeat: Int? = null,
+    val overlapBars: Int? = null,
+    val gesture: String? = null,         // "none" | "delay" | "reverb" | "both"
+)
 
 /**
  * Stored offline analysis for one track, in that track's own timeline seconds.
@@ -36,7 +59,7 @@ import kotlin.math.pow
  *
  * Phase 1 fills every field from DSP alone (see native/analyzer/), so
  * [beatConfidence] and [vocalActivityMask] are heuristics rather than a
- * trained model's output — the policy already treats them with the same
+ * trained model's output â€” the policy already treats them with the same
  * scrutiny it would a model that failed to load.
  */
 data class TrackAnalysis(
@@ -113,7 +136,7 @@ data class TrackAnalysis(
      * The cheap vocal detector's curves over the same edges, present only
      * where open-unmix could not run (and on a head-only provisional, which
      * publishes its edge half alone). Same [CurveWindow] shape and the same
-     * model scale as [vocalWindows] — [CheapVocal] rescales onto it — so a
+     * model scale as [vocalWindows] â€” [CheapVocal] rescales onto it â€” so a
      * reader consumes either source without asking which filled it. Kept
      * apart from [vocalWindows] so the loop mix's own checks stay keyed to
      * the model's; the component versioning reads both.
@@ -129,7 +152,7 @@ data class TrackAnalysis(
      * BitChord, Automix 2.0 Phase 0: integrated K-weighted loudness (LUFS-I,
      * ITU-R BS.1770-4) of the whole track, and of its first and last half
      * minute. Null until measured, and absent from every analysis that
-     * predates the measurement — the policy treats a null here as "no
+     * predates the measurement â€” the policy treats a null here as "no
      * evidence" and never level-matches from it.
      */
     val lufs: Double? = null,
@@ -141,7 +164,7 @@ data class TrackAnalysis(
      *
      * The old cache key was one monolithic era: a vocal improvement threw away
      * every grid, a grid fix re-ran the vocal model. The ladder made that
-     * expensive — an L0 recompute sits on the critical path of the transition —
+     * expensive â€” an L0 recompute sits on the critical path of the transition â€”
      * so validity moved onto the record itself, one version per component,
      * stamped by whichever rung filled it. A bump costs only its own fields.
      * Zero means "this component has not been (re)measured under its current
@@ -151,6 +174,11 @@ data class TrackAnalysis(
     val gridVersion: Int = 0,
     val vocalVersion: Int = 0,
     val miscVersion: Int = 0,
+    /**
+     * BitChord, Automix 2.0 Phase 4: manual overrides from the user.
+     * Keyed by track/pair IDs, not analysis version, so they survive re-analysis.
+     */
+    val manualOverrides: ManualOverrides? = null,
 ) {
     /**
      * Whether this analysis actually describes a track, as opposed to standing
@@ -160,8 +188,8 @@ data class TrackAnalysis(
      * track nothing has looked at yet has a blank [status], while one whose
      * decode failed is recorded [STATUS_READY] with every field at its default
      * so it is not retried forever. A zero [bpm] is what separates the second
-     * from a real result — and it is also the threshold the policy uses, since
-     * a tempo outside 40–220 drops a pairing to a plain crossfade anyway.
+     * from a real result â€” and it is also the threshold the policy uses, since
+     * a tempo outside 40â€“220 drops a pairing to a plain crossfade anyway.
      */
     val isUsable: Boolean get() = status == STATUS_READY && bpm > 0
 

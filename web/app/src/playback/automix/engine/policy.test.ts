@@ -301,6 +301,8 @@ function scorerInput(overrides: Partial<StyleScorerInput> = {}): StyleScorerInpu
     outGridConf: 0.8,
     inGridConf: 0.8,
     vocalOverlap: 0.05,
+    vocalOverlapStemUsed: false,
+    stemQualitySdrDb: -100,
     stretchRatio: 1.0,
     residualDeltaLufs: null,
     loopPlan: null,

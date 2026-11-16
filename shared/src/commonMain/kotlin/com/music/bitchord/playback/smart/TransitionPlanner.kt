@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Ported from Orchard (https://github.com/SFG5453/Orchard), merging its
  * TransitionPlanner.kt and WsolaPlanner.kt into one file.
  *
@@ -40,7 +40,7 @@ import kotlin.math.roundToLong
  * reads the timing fields ([TransitionPlan.transitionStart], [TransitionPlan.fadeSeconds]),
  * cues the incoming track to [TransitionPlan.incomingCueTime] instead of 0,
  * stretches it by [TransitionPlan.incomingPlaybackRate] to align tempo, and
- * renders [TransitionPlan.transitionStyle] as filtering across the blend —
+ * renders [TransitionPlan.transitionStyle] as filtering across the blend â€”
  * a closing low-pass over the outgoing track for [TransitionStyle.DJ_FILTER],
  * a low-end handover at [TransitionPlan.bassSwapFraction] for
  * [TransitionStyle.DJ_BLEND]. The gain curve underneath is equal-power in every
@@ -52,7 +52,7 @@ enum class CrossfadeMode { STANDARD, SMART }
 
 /**
  * The minimal facts about a queue item the planner needs, independent of
- * Media3's `MediaItem` — kept separate so this file stays pure and testable
+ * Media3's `MediaItem` â€” kept separate so this file stays pure and testable
  * without constructing one.
  */
 data class TransitionTrackInfo(
@@ -90,9 +90,9 @@ private const val MIN_SMART_DURATION_SECONDS = 45.0
 private const val MIN_INCOMING_CLEARANCE_SECONDS = 5.0
 
 private val KEY_INDEX = mapOf(
-    "C" to 0, "C♯" to 1, "D♭" to 1, "D" to 2, "D♯" to 3, "E♭" to 3,
-    "E" to 4, "F" to 5, "F♯" to 6, "G♭" to 6, "G" to 7, "G♯" to 8,
-    "A♭" to 8, "A" to 9, "A♯" to 10, "B♭" to 10, "B" to 11,
+    "C" to 0, "Câ™¯" to 1, "Dâ™­" to 1, "D" to 2, "Dâ™¯" to 3, "Eâ™­" to 3,
+    "E" to 4, "F" to 5, "Fâ™¯" to 6, "Gâ™­" to 6, "G" to 7, "Gâ™¯" to 8,
+    "Aâ™­" to 8, "A" to 9, "Aâ™¯" to 10, "Bâ™­" to 10, "B" to 11,
 )
 
 /** Spoken word, in any of a track's title, artist or album: mixing it is never wanted. */
@@ -103,16 +103,16 @@ private val SPOKEN_TEXT = Regex(
 
 /**
  * A live recording, read off a title or album. Only the way a release *labels*
- * one counts — "(Live)", "[Live at Wembley]", "Song - Live", an album called
- * "Live at …" or "Live: …" — because the bare word was matching ordinary song
+ * one counts â€” "(Live)", "[Live at Wembley]", "Song - Live", an album called
+ * "Live at â€¦" or "Live: â€¦" â€” because the bare word was matching ordinary song
  * titles: "Live It Up", "Live Your Life", "Live While We're Young" were all
  * refused a mix, and a refused pair gets no seek-bar marker either.
  */
 private val LIVE_TEXT = Regex(
     // A bracketed tag: "(Live)", "(Acoustic Live)", "[Live at Wembley]", "(Live Version)".
     """[(\[]\s*(?:[^)\]]*\s)?live(?:\s+(?:at|from|in|on|version|session|recording|performance|edit)\b[^)\]]*)?\s*[)\]]""" +
-        // A dash suffix: "Song - Live", "Song – Live from the Garden".
-        """|[-–—]\s*live(?:\s+(?:at|from|in|on|version|session|recording|performance|edit)\b.*)?\s*$""" +
+        // A dash suffix: "Song - Live", "Song â€“ Live from the Garden".
+        """|[-â€“â€”]\s*live(?:\s+(?:at|from|in|on|version|session|recording|performance|edit)\b.*)?\s*$""" +
         // A live album: "Live at Wembley", "Live: At The Hall".
         """|^\s*live\s*(?::|\s(?:at|from|in|on)\b)""",
     RegexOption.IGNORE_CASE,
@@ -161,6 +161,46 @@ enum class FilterTransitionVariant {
 
     /** Filter ride whose outgoing side trails away through the beat-synced echo. */
     ECHO_RIDE,
+} 
+/** BitChord, Automix 2.0 Phase 4 Task B1: named presets for manual overrides. */
+enum class PresetName {
+    FADE,   // -> EQUAL_POWER (plain fade)
+    RISE,   // -> DJ_FILTER with SWEEP variant
+    BLEND,  // -> DJ_BLEND
+    LOOP,   // -> Loop mix (handled separately)
+}
+
+/** Preset to planOverride mapping (single source of truth). */
+val PRESET_OVERRIDES = mapOf(
+    PresetName.FADE to mapOf(
+        "style" to "DJ_FILTER",
+        "gesture" to "none"
+    ),
+    PresetName.RISE to mapOf(
+        "style" to "DJ_FILTER",
+        "gesture" to "none"
+    ),
+    PresetName.BLEND to mapOf(
+        "style" to "DJ_BLEND",
+        "gesture" to "none"
+    ),
+    PresetName.LOOP to mapOf(
+        "style" to "LOOP",
+        "gesture" to "none"
+    ),
+)
+
+/** All preset names for iteration/debugging. */
+val ALL_PRESETS = listOf(PresetName.FADE, PresetName.RISE, PresetName.BLEND, PresetName.LOOP)
+
+/** Apply a preset to a planOverride map. */
+fun applyPreset(baseOverrides: MutableMap<String, Any?>?, preset: PresetName, isIncoming: Boolean): MutableMap<String, Any?> {
+    val base = baseOverrides?.toMutableMap() ?: mutableMapOf()
+    val presetOverride = PRESET_OVERRIDES[preset] ?: return base
+    val planOverride = (base["planOverride"] as? MutableMap<String, Any?>)?.toMutableMap() ?: mutableMapOf()
+    planOverride.putAll(presetOverride)
+    base["planOverride"] = planOverride
+    return base
 }
 
 /**
@@ -209,8 +249,8 @@ data class TransitionPlan(
      * through this overlap, 0..1; see [vocalOverlapAmount].
      *
      * Separate from [filterSweep] because they answer to different things.
-     * [filterSweep] is a property of the *style* — a filter ride is what an
-     * unmatched pair gets instead of a beat-matched blend — and a blend
+     * [filterSweep] is a property of the *style* â€” a filter ride is what an
+     * unmatched pair gets instead of a beat-matched blend â€” and a blend
      * deliberately asks for none of it. This is a property of the *material*, and
      * it applies whatever the style: two tempo-matched vocals sitting on the same
      * grid is the case a blend handles worst, precisely because nothing about the
@@ -233,7 +273,7 @@ data class TransitionPlan(
      */
     val beatSeconds: Double = 0.0,
     /**
-     * BitChord, Automix 2.0 Phase 0: this plan is a gap mix — the outgoing
+     * BitChord, Automix 2.0 Phase 0: this plan is a gap mix â€” the outgoing
      * track plays to its content end, a [GAP_FADE_SECONDS] crossfade sits on
      * the silence point, and the incoming track enters on its first audible
      * downbeat. A recording property, reported as its own style, not a
@@ -256,7 +296,7 @@ data class TransitionPlan(
     val echoSeconds: Double = 0.0,
     /**
      * Phase 3: the FX gesture for this transition.
-     * 'none' | 'delay' | 'reverb' | 'both'. Default 'none' — real choice lands in tasks 2-4.
+     * 'none' | 'delay' | 'reverb' | 'both'. Default 'none' â€” real choice lands in tasks 2-4.
      */
     val gesture: String = "none",
     /** Phase 3: total gesture seconds (delay + reverb). */
@@ -443,7 +483,7 @@ const val INCOMING_MAX_ADVANCE_BARS = 8
 fun latestIncomingCue(length: Double): Double =
     if (length.isFinite() && length > 0) length * MAX_INCOMING_SKIP_FRACTION else Double.POSITIVE_INFINITY
 
-/** Phase 2 Task 5: cap from first audible downbeat — min of 25% duration and +8 bars. */
+/** Phase 2 Task 5: cap from first audible downbeat â€” min of 25% duration and +8 bars. */
 fun latestIncomingCueFromFirstAudible(firstAudible: Double, length: Double, beatInterval: Double): Double {
     val capByFraction = latestIncomingCue(length)
     val capByBars = if (beatInterval > 0) firstAudible + INCOMING_MAX_ADVANCE_BARS * 4 * beatInterval else Double.POSITIVE_INFINITY
@@ -489,7 +529,7 @@ fun latestIncomingCueFromFirstAudible(firstAudible: Double, length: Double, beat
  * [plan] with its incoming side pulled back to within the strict skip cap of
  * [nextLength], by whole incoming bars so a beat-aligned entry stays aligned.
  * Phase 2 Task 5: cap is min(25% duration, firstAudible + 8 bars).
- * The backstop behind the capped candidate choice above, for every path —
+ * The backstop behind the capped candidate choice above, for every path â€”
  * an arrangement overlap or a stretch can still carry a cue past the line.
  */
 private fun capIncomingSkip(plan: TransitionPlan, nextAnalysis: TrackAnalysis, nextLength: Double): TransitionPlan {
@@ -537,7 +577,7 @@ private const val GAP_OPENER_ENERGY_RATIO = 1.15
  * the outgoing track closing melodically over its last seconds, and the
  * incoming one opening clearly on its first audible downbeat. Two songs that
  * both want the room left alone between them are best served by giving it to
- * them — the crossfade at the silence point is a gesture, not a blend.
+ * them â€” the crossfade at the silence point is a gesture, not a blend.
  */
 private fun gapPlan(
     analysis: TrackAnalysis,
@@ -557,7 +597,7 @@ private fun gapPlan(
         return null
     }
     // Melodic close in the outgoing track: its last seconds sit well under
-    // the track's own typical level. Relative, never absolute — a quiet
+    // the track's own typical level. Relative, never absolute â€” a quiet
     // master and a loud one must both be able to close.
     val typical = meanEnergy(analysis.energyCurve)
     if (typical <= 0.0) return null
@@ -633,7 +673,7 @@ private const val MAX_PHRASE_OVERLAP_SECONDS = 64.0
  * long as the bars need, which is the whole reason a listener picks it.
  *
  * Returns null whenever the evidence cannot carry a bar-aligned mix of that
- * length — no trusted tempo, or a track too short to fit it — so [planTransition]
+ * length â€” no trusted tempo, or a track too short to fit it â€” so [planTransition]
  * falls through to the adaptive plan instead of forcing a ragged one.
  */
 private fun phraseBarPlan(
@@ -760,7 +800,7 @@ private fun phraseBarPlan(
         bedPosition = BED_POSITION,
         bassSwapFraction = bassSwapFraction,
         // A matched pair hands the low end over on a beat and stays open; an
-        // unmatched pair has no shared grid, so it rides the closing low-pass —
+        // unmatched pair has no shared grid, so it rides the closing low-pass â€”
         // the same split [mixPlan] makes.
         filterSweep = if (beatmatched) 0.0 else FILTER_SWEEP,
         filterVariant = FilterTransitionVariant.SWEEP,
@@ -802,7 +842,7 @@ private const val MAX_OVERLAP_SECONDS = 16.0
 /**
  * One continuous equal-power fade across the whole overlap. 0.5/0.5 is the
  * plain symmetric crossfade, which is exactly the sin/cos pair
- * [com.music.bitchord.playback.CrossfadeController] rides — so at these values
+ * [com.music.bitchord.playback.CrossfadeController] rides â€” so at these values
  * the renderer already honours them, and anything else would need a two-segment
  * gain curve it does not have.
  */
@@ -1242,14 +1282,14 @@ private fun phraseSwitch(
         // Deliberately not `planned.filterSweep`. A phrase switch is the one
         // case where both decks are genuinely on the same grid, and the move
         // there is to hand the low end over on a beat, not to hide the outgoing
-        // track behind a filter — filtering a blend this well aligned would
+        // track behind a filter â€” filtering a blend this well aligned would
         // throw away the reason it was worth aligning. The renderer reads a
         // nonzero sweep as "ride the filter instead", so this says zero.
         filterSweep = 0.0,
         // The separation this style *does* need, and the one it cannot get from
         // alignment. Two tracks on a shared grid are the worst case for
         // overlapping voices precisely because nothing about the arrangement
-        // pulls them apart — they sit in the same bar, in the same range, for the
+        // pulls them apart â€” they sit in the same bar, in the same range, for the
         // whole blend. The renderer uses this to deepen the entry high-pass and
         // the exit low-pass without turning the blend into a filter ride.
         vocalOverlap = plannedVocalOverlap(
@@ -1535,10 +1575,10 @@ private fun analysisReadyForTrack(analysis: TrackAnalysis, track: TransitionTrac
  *   mix whose overlap is exactly that many bars of the outgoing track's own
  *   4/4 grid, both edges snapped onto phrase boundaries or downbeats. `0` (the
  *   default) leaves the adaptive overlap above in charge. A pair that cannot
- *   support a bar-aligned mix of that length — no trusted tempo, or too short
- *   to fit it — falls back to the ordinary smart plan rather than forcing a
+ *   support a bar-aligned mix of that length â€” no trusted tempo, or too short
+ *   to fit it â€” falls back to the ordinary smart plan rather than forcing a
  *   ragged one.
- * @param mixWindow Confine the mix to the last and first [MIX_WINDOW_SECONDS] of the pair — see
+ * @param mixWindow Confine the mix to the last and first [MIX_WINDOW_SECONDS] of the pair â€” see
  *   [clampToMixWindow]. The desktop asks for it; the phone leaves it off, so its plans are
  *   unchanged.
  */
@@ -1583,7 +1623,7 @@ fun planTransition(
  * Apple-style Automix window: mixing is confined to the last [MIX_WINDOW_SECONDS] of the outgoing
  * track and the first [MIX_WINDOW_SECONDS] of the incoming one. The planner's own overlaps are far
  * shorter than this in practice, so the clamp is a guard that keeps the invariant true no matter how
- * the anchors are ranked — it never lengthens a mix, only refuses to let one start too early or cue
+ * the anchors are ranked â€” it never lengthens a mix, only refuses to let one start too early or cue
  * too deep into the next track.
  */
 private fun clampToMixWindow(plan: TransitionPlan, length: Double, playbackTime: Double): TransitionPlan {
@@ -1703,7 +1743,7 @@ private fun planTransitionInner(
 
     val nextLength = max(nextAnalysis.duration.orZero(), trackDurationSeconds(nextTrack))
 
-    // Phase 2 Task 6: Style Scorer with Hard Gates — single decision point
+    // Phase 2 Task 6: Style Scorer with Hard Gates â€” single decision point
     val scorerInput = StyleScorerInput(
         out = analysis,
         outGridConf = analysis.beatConfidence.orZero(),
@@ -1726,7 +1766,7 @@ private fun planTransitionInner(
         loopOutBars = 0,
         loopInBars = 0,
         loopFold = 1.0,
-        energyContinuity = 0.5, // placeholder — would need energy curves
+        energyContinuity = 0.5, // placeholder â€” would need energy curves
         outLowEnergyAtJoin = if (analysis.lowEnergyCurve.isNotEmpty()) {
             averageEnergy(analysis.lowEnergyCurve, mixAnchor - 2.0, mixAnchor)?.let { avg ->
                 lowEnergyReference(analysis.lowEnergyCurve)?.let { ref -> avg / ref }
@@ -1742,7 +1782,7 @@ private fun planTransitionInner(
     val scoreResult = scoreStyles(scorerInput)
 
     // Phase 3: the scorer's gesture rides whichever plan the transition
-    // landed on — echoSeconds wakes here, the render side picks it up per deck.
+    // landed on â€” echoSeconds wakes here, the render side picks it up per deck.
     fun gestured(plan: TransitionPlan): TransitionPlan = plan.copy(
         echoSeconds = scoreResult.gestureSeconds,
         gesture = scoreResult.gesture,
@@ -1755,7 +1795,7 @@ private fun planTransitionInner(
         StyleCandidate.GAP -> {
             gapPlan(analysis, nextAnalysis, finalMixAnchor, playbackTime, policy)
                 ?.let { return capIncomingSkip(gestured(it), nextAnalysis, nextLength) }
-            // GAP gate failed in scorer but passed here — fall through
+            // GAP gate failed in scorer but passed here â€” fall through
             gestured(standardTransition(length, playbackTime, standardFade, minFadeSeconds, "gap-scorer-mismatch"))
         }
         StyleCandidate.FADE -> {
@@ -1989,7 +2029,7 @@ private fun mixPlan(
         analysis, nextAnalysis, traits, energy, filterVariant,
     )
     val handoffBpm = if (currentBpm > 0) currentBpm else nextBpm
-    // Advanced also blends any pair a speed-up matches on two trusted grids —
+    // Advanced also blends any pair a speed-up matches on two trusted grids â€”
     // the 5-10% apart that used to be left to a filter ride.
     val sameBeatBlend = (traits == null || incomingPlaybackRate >= 1.0) && (
         currentBpm > 0 && nextBpm > 0 &&
@@ -2160,3 +2200,4 @@ private fun mixPlan(
         reason = "smart-duration",
     )
 }
+

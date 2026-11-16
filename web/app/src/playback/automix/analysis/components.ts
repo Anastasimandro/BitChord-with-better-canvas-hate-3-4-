@@ -19,6 +19,10 @@
 //           loudness, content end, intro/outro of the windows); L3 completes
 //           it (whole-track curve, key, whole-track LUFS) and stamps the
 //           version — the stamp means "the component is whole".
+// - stem:   stems — the 2-stem (vocals + accompaniment) separation over the
+//           overlap window, from the 2-stem model. Filled at L3/idle or on-
+//           demand, NEVER on the critical path (L0-L2 ladder untouched).
+//           Cached per (trackId, span hash) with stemVersion.
 //
 // musicVideo is NOT a component: it comes from the fetch (whether YouTube
 // served a video), and it is re-derived every time the audio is fetched.
@@ -29,9 +33,10 @@ import { ANALYSIS_VERSION } from './types';
 export const GRID_VERSION = 1;
 export const VOCAL_VERSION = 1;
 export const MISC_VERSION = 1;
+export const STEM_VERSION = 1;
 
 /** The versions this build computes. A component missing from a stored record reads as 0. */
-export const COMPONENT_VERSIONS = { grid: GRID_VERSION, vocal: VOCAL_VERSION, misc: MISC_VERSION } as const;
+export const COMPONENT_VERSIONS = { grid: GRID_VERSION, vocal: VOCAL_VERSION, misc: MISC_VERSION, stem: STEM_VERSION } as const;
 
 export type ComponentName = keyof typeof COMPONENT_VERSIONS;
 
@@ -70,6 +75,9 @@ export function heldComponents(a: TrackAnalysis): Set<ComponentName> {
   // existed — structure alone still holds.
   if (hasLoudness && hasStructure) held.add('misc');
   else if (a.analysisVersion < MISC_LOUDNESS_SINCE && hasStructure) held.add('misc');
+  // Stem component: holds when stems array is present (even if empty — a
+  // completed measurement of "model couldn't run" is still a measurement).
+  if (a.stems != null) held.add('stem');
   return held;
 }
 
@@ -86,6 +94,7 @@ export function adoptCached(a: TrackAnalysis): TrackAnalysis {
     gridVersion: a.gridVersion ?? (held.has('grid') ? GRID_VERSION : 0),
     vocalVersion: a.vocalVersion ?? (held.has('vocal') ? VOCAL_VERSION : 0),
     miscVersion: a.miscVersion ?? (held.has('misc') ? MISC_VERSION : 0),
+    stemVersion: a.stemVersion ?? (held.has('stem') ? STEM_VERSION : 0),
   };
 }
 
@@ -110,14 +119,24 @@ export function needsTailEdge(a: TrackAnalysis): boolean {
   return (a.gridVersion ?? 0) < GRID_VERSION;
 }
 
-/** What L3 still owes [a]: the vocal component and the whole-track misc fields. */
+/** What L3 still owes [a]: the vocal component, the stem component, and the whole-track misc fields. */
 export function needsLevel3(a: TrackAnalysis): boolean {
-  return (a.vocalVersion ?? 0) < VOCAL_VERSION || (a.miscVersion ?? 0) < MISC_VERSION;
+  return (a.vocalVersion ?? 0) < VOCAL_VERSION || (a.miscVersion ?? 0) < MISC_VERSION || (a.stemVersion ?? 0) < STEM_VERSION;
 }
 
 /** What L2 still owes [a]: a vocal curve over its edges, from any source. */
 export function needsLevel2(a: TrackAnalysis): boolean {
   return (a.vocalVersion ?? 0) < VOCAL_VERSION;
+}
+
+/**
+ * Whether [a] needs stem computation: the overlap window for a planned
+ * transition where vocalOverlap > 0.15 and the stem isn't already cached.
+ * This is called by the planner when it's about to score a BLEND with
+ * significant vocal overlap.
+ */
+export function needsStem(a: TrackAnalysis, spanHash: string): boolean {
+  return (a.stemVersion ?? 0) < STEM_VERSION || a.stems?.spanHash !== spanHash;
 }
 
 /**

@@ -1,12 +1,24 @@
-// From AutoMix (https://github.com/heydavidf/automix), Copyright (C) 2026 David Finnegan.
+﻿// From AutoMix (https://github.com/heydavidf/automix), Copyright (C) 2026 David Finnegan.
 // AGPL-3.0-only: see ./LICENSE and ./NOTICE.md in playback/automix.
 
-import type { TrackAnalysis } from '../analysis/types';
+import { analyzer } from '../analysis/analyzer';
+import type { TrackAnalysis, Stems, StemWindow } from '../analysis/types';
 import type { Deck } from './deck';
 import { gridOf, phraseAtOrBefore, phraseAtOrAfter, downbeatAtOrAfter, BEATS_PER_BAR } from './grid';
-import { mixOutAnchor, plannedVocalOverlap, incomingGainCompensation, mixLufsOf, computeEnergyContinuity, computeLowEnergyAtJoin, scoreStyles, type StyleScorerInput } from './policy';
+import {
+  mixOutAnchor,
+  plannedVocalOverlap,
+  stemBackedVocalOverlap,
+  incomingGainCompensation,
+  mixLufsOf,
+  computeEnergyContinuity,
+  computeLowEnergyAtJoin,
+  scoreStyles,
+  type StyleScorerInput,
+} from './policy';
 import type { MixStyle } from '../telemetry';
 import type { LoopMixPlan } from './loopMix';
+import { PRESET_OVERRIDES, type PresetName } from './presets';
 
 export interface TransitionRequest {
   from: Deck;
@@ -17,6 +29,11 @@ export interface TransitionRequest {
   bars: number;
   /** Start at the outgoing track's next downbeat instead of its natural mix-out point. */
   forceNow?: boolean;
+  /** Phase 4: manual overrides loaded by the scheduler and passed to the scorer. */
+  fromOverrides?: TrackAnalysis['manualOverrides'];
+  toOverrides?: TrackAnalysis['manualOverrides'];
+  /** Phase 4 Task B1: overrides that were applied, for telemetry. */
+  overridesApplied?: string[];
 }
 
 /** Phase 3: the FX gesture used for this transition, if any. */
@@ -38,14 +55,16 @@ export interface TransitionPlan {
   /**
    * BitChord: how the blend is played. 'blend' is AutoMix's beatmatch;
    * 'filter' the phone's DJ_FILTER for a pair that can't be beatmatched;
-   * 'crossfade' AutoMix's fallback; 'gap' the Phase 0 style — a melodic
+   * 'crossfade' AutoMix's fallback; 'gap' the Phase 0 style â€” a melodic
    * close into a clear opener hands over at the silence point instead of
    * overlapping.
    */
   style: MixStyle;
   /** BitChord: why a pair wasn't beatmatched, for stats for nerds. */
   reason: string | null;
-  /** Phase 2 Task 6: styles rejected by the scorer and the gate that killed each. */
+  /**
+   * Phase 2 Task 6: styles rejected by the scorer and the gate that killed each.
+   */
   rejectedStylesAndWhy?: { style: MixStyle; reason: string }[];
   /** Phase 3: the FX gesture chosen for this transition. */
   gesture?: MixGesture;
@@ -53,10 +72,31 @@ export interface TransitionPlan {
   gestureSeconds?: number;
   /** Phase 3: gestures considered and rejected, with reasons. */
   rejectedGesturesAndWhy?: { gesture: MixGesture; reason: string }[];
+  /** Phase 4 Task A2: whether the blend used stem-backed separation. */
+  stemUsed?: boolean;
+  /** Phase 4 Task B1: overrides that were applied for this transition. */
+  overridesApplied?: string[];
+}
+
+/** Phase 4 Task A2: span hash for stem cache lookup. */
+export function stemSpanHash(
+  trackId: string,
+  overlapStart: number,
+  overlapEnd: number,
+  edge: 'head' | 'tail',
+): string {
+  // Simple hash combining track ID, edge, and overlap window bounds
+  const data = `${trackId}:${edge}:${overlapStart.toFixed(2)}:${overlapEnd.toFixed(2)}`;
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) {
+    hash = ((hash << 5) - hash) + data.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
 }
 
 // Below this, a beat-lock is more likely confidently WRONG than right (a
-// 0.17 grid locked precisely off-beat) — a clean crossfade beats a bad
+// 0.17 grid locked precisely off-beat) â€” a clean crossfade beats a bad
 // beatmatch. 0.3 proved too aggressive on loose lofi (every mix fell back);
 // 0.2-0.45 grids now beatmatch but only for the short 4-bar tier, so a
 // wrong lock costs ~11s, not a 46s blend.
@@ -74,7 +114,7 @@ export const MAX_INCOMING_SKIP_FRACTION = 0.25;
 
 /**
  * Confidence-scaled blend length: the UI's bar count is a MAX, not a command.
- * Long overlaps are a house/techno assumption — two melodic tracks over a
+ * Long overlaps are a house/techno assumption â€” two melodic tracks over a
  * shaky grid for 46s is mush, so weaker grids get shorter blends.
  */
 export function effectiveBlendBars(
@@ -152,7 +192,7 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
     const latestStart = fromAnalysis.durationSec - blendInputSec - fromGrid.barSec;
     mixOutTrackTime = Math.min(mixOutTrackTime, phraseAtOrBefore(fromGrid, latestStart));
     if (mixOutTrackTime < fromPos) {
-      // too late for the natural point — go at the next phrase instead
+      // too late for the natural point â€” go at the next phrase instead
       mixOutTrackTime = phraseAtOrAfter(fromGrid, from.timeline.trackTimeAt(earliest) ?? fromPos);
     }
   }
@@ -179,6 +219,16 @@ export function scheduleTransition(req: TransitionRequest): TransitionPlan {
   // Align to a downbeat at or after the base, not exceeding hardCap.
   const alignedEntry = downbeatAtOrAfter(toGrid, mixInTrackTime);
   if (alignedEntry <= hardCap) mixInTrackTime = alignedEntry;
+
+  // --- PHASE 4 TASK B1: entryBeat override ---
+  // entryBeat 1 = first downbeat; entryBeat N = Nth downbeat from start
+  const planOverride = req.toOverrides?.planOverride ?? req.fromOverrides?.planOverride;
+  if (planOverride?.entryBeat !== undefined && planOverride.entryBeat > 1) {
+    const nthDownbeat = firstDownbeat + (planOverride.entryBeat - 1) * barSec;
+    if (nthDownbeat <= hardCap) {
+      mixInTrackTime = nthDownbeat;
+    }
+  }
 
   // --- schedule transport ---
   to.playAt({ ctxTime: t0, trackTime: mixInTrackTime, rate });
@@ -247,7 +297,7 @@ const MAX_SLOW_DOWN = 0.1;
 const MAX_SPEED_UP = 0.25;
 /** BitChord: a filter mix is at most this many outgoing bars (the phone's DJ_FILTER length). */
 const FILTER_MAX_BARS = 8;
-/** Phase 3 Task 5: two-kick filter caps at 4 bars — a kick handoff is a moment, not a journey. */
+/** Phase 3 Task 5: two-kick filter caps at 4 bars â€” a kick handoff is a moment, not a journey. */
 const FILTER_MAX_OVERLAP_BARS = 4;
 
 /**
@@ -309,6 +359,15 @@ function scheduleFilterMix(
     const hardCap = Math.min(capByBars, capByFraction, toAnalysis.durationSec - barSec);
     const alignedEntry = downbeatAtOrAfter(toGrid, firstDownbeat);
     mixInTrackTime = alignedEntry <= hardCap ? alignedEntry : firstDownbeat;
+
+    // PHASE 4 TASK B1: entryBeat override for filter mix
+    const planOverride = req.toOverrides?.planOverride ?? req.fromOverrides?.planOverride;
+    if (planOverride?.entryBeat !== undefined && planOverride.entryBeat > 1) {
+      const nthDownbeat = firstDownbeat + (planOverride.entryBeat - 1) * barSec;
+      if (nthDownbeat <= hardCap) {
+        mixInTrackTime = nthDownbeat;
+      }
+    }
   } else {
     mixInTrackTime = Math.min(toAnalysis.introEndSec ?? 0, 1);
   }
@@ -357,7 +416,7 @@ const GAP_FADE_SEC = 0.4;
 /**
  * BitChord, Phase 0's GAP style: the outgoing track's last audible content
  * hands to the incoming track's first downbeat over a very short crossfade
- * at the silence point — a melodic close into a clear opener overlaps
+ * at the silence point â€” a melodic close into a clear opener overlaps
  * badly, and clean silence between them is the mix. No EQ, no filters: the
  * two tracks barely touch.
  */
@@ -377,7 +436,7 @@ export function scheduleGapMix(req: TransitionRequest): TransitionPlan {
   if (t0 === null || t0 < earliest) return scheduleFallback(req, earliest, 'the silence point is already gone');
 
   // Phase 2 Task 5: the incoming track enters at its first downbeat
-  // (using grid's downbeat as the audible downbeat approximation) — never a best-drop search.
+  // (using grid's downbeat as the audible downbeat approximation) â€” never a best-drop search.
   const mixInTrackTime = toGrid.downbeatSec;
   to.playAt({ ctxTime: t0, trackTime: mixInTrackTime, rate: 1 });
   from.pauseAt(t0 + GAP_FADE_SEC + 0.05);
@@ -447,7 +506,7 @@ function applyEqualPowerCross(outParam: AudioParam, inParam: AudioParam, t0: num
  * Phase 3 Task 2: throw the OUTGOING deck's close into the beat-synced delay.
  * The delay time is one beat of the outgoing grid at the deck's effective
  * playback rate, so every repeat lands on the beat. The wet opens at the
- * blend's start and dies at its end — inside the transition window, before
+ * blend's start and dies at its end â€” inside the transition window, before
  * the outgoing deck pauses. The incoming deck and the handover mechanics
  * stay untouched; the nodes tear down in the existing scheduleAfter cleanup.
  */
@@ -501,8 +560,96 @@ function scheduleAfter(ctx: AudioContext, ctxTime: number, fn: () => void): void
 }
 
 // ============================================================================
-// Phase 2 Task 6 — Style-scored transition planning
+// Phase 2 Task 6 â€” Style-scored transition planning
 // ============================================================================
+
+/**
+ * Phase 4 Task B1: Apply manual overrides with correct precedence.
+ *
+ * PRECEDENCE (from task spec):
+ * - bpm/camelot/gridNudge: applied BEFORE scoring (they fix the evidence)
+ * - planOverride.style: scorer still runs (fills unspecified, sanity-gates),
+ *   but its style choice is overridden; gates do NOT kill a forced style
+ * - entryBeat/overlapBars/gesture: replace those scorer outputs only
+ * - Every consumption recorded in overridesApplied for the event telemetry.
+ *
+ * Returns the modified analyses (cloned) and the list of applied override names.
+ */
+export function applyOverrides(
+  fromAnalysis: TrackAnalysis,
+  toAnalysis: TrackAnalysis,
+  fromOverrides?: TrackAnalysis['manualOverrides'],
+  toOverrides?: TrackAnalysis['manualOverrides'],
+): { from: TrackAnalysis; to: TrackAnalysis; overridesApplied: string[] } {
+  const applied: string[] = [];
+  let from = { ...fromAnalysis };
+  let to = { ...toAnalysis };
+
+  // --- bpm/camelot/gridNudge: applied BEFORE scoring (fix the evidence) ---
+
+  // fromOverrides apply to outgoing track (per-track)
+  if (fromOverrides) {
+    if (fromOverrides.bpm !== undefined) {
+      from = { ...from, bpm: fromOverrides.bpm, beatIntervalSec: 60 / fromOverrides.bpm };
+      applied.push('from.bpm');
+    }
+    if (fromOverrides.camelot !== undefined) {
+      const [numStr, letter] = [fromOverrides.camelot.slice(0, -1), fromOverrides.camelot.slice(-1).toUpperCase()];
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && (letter === 'A' || letter === 'B')) {
+        from = { ...from, camelot: { num, letter: letter as 'A' | 'B' } };
+        applied.push('from.camelot');
+      }
+    }
+    if (fromOverrides.gridNudgeBeats !== undefined) {
+      // gridNudgeBeats shifts B's head-grid alignment, so it applies to incoming track
+      applied.push('from.gridNudgeBeats');
+    }
+  }
+
+  // toOverrides apply to incoming track (per-track)
+  if (toOverrides) {
+    if (toOverrides.bpm !== undefined) {
+      to = { ...to, bpm: toOverrides.bpm, beatIntervalSec: 60 / toOverrides.bpm };
+      applied.push('to.bpm');
+    }
+    if (toOverrides.camelot !== undefined) {
+      const [numStr, letter] = [toOverrides.camelot.slice(0, -1), toOverrides.camelot.slice(-1).toUpperCase()];
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && (letter === 'A' || letter === 'B')) {
+        to = { ...to, camelot: { num, letter: letter as 'A' | 'B' } };
+        applied.push('to.camelot');
+      }
+    }
+    if (toOverrides.gridNudgeBeats !== undefined) {
+      // Shift B's head-grid by N beats
+      if (to.headBeats && to.headBeats.downbeats.length > 0) {
+        const beatSec = to.beatIntervalSec ?? 60 / (to.bpm ?? 120);
+        const nudgeSec = toOverrides.gridNudgeBeats * beatSec;
+        to = {
+          ...to,
+          headBeats: {
+            ...to.headBeats,
+            downbeats: to.headBeats.downbeats.map((d) => d + nudgeSec),
+          },
+          firstDownbeatSec: (to.firstDownbeatSec ?? 0) + nudgeSec,
+        };
+        applied.push('to.gridNudgeBeats');
+      }
+    }
+  }
+
+  // planOverride is per-pair, merge from both sides (toOverrides takes precedence for plan fields)
+  const planOverride = toOverrides?.planOverride ?? fromOverrides?.planOverride;
+  if (planOverride) {
+    if (planOverride.style) applied.push(`planOverride.style=${planOverride.style}`);
+    if (planOverride.entryBeat !== undefined) applied.push(`planOverride.entryBeat=${planOverride.entryBeat}`);
+    if (planOverride.overlapBars !== undefined) applied.push(`planOverride.overlapBars=${planOverride.overlapBars}`);
+    if (planOverride.gesture) applied.push(`planOverride.gesture=${planOverride.gesture}`);
+  }
+
+  return { from, to, overridesApplied: applied };
+}
 
 /**
  * Plans a transition using the Style Scorer with hard gates.
@@ -517,17 +664,28 @@ export function scheduleWithStyleScorer(
   req: TransitionRequest,
   loopPlan: LoopMixPlan | null,
 ): TransitionPlan {
-  const { from, to, fromAnalysis, toAnalysis, bars: requestedBars, forceNow } = req;
+  const { from, to, fromAnalysis, toAnalysis, bars: requestedBars, forceNow, fromOverrides, toOverrides } = req;
   const ctx = from.ctx;
   const now = ctx.currentTime;
   const earliest = now + Math.max(from.scheduleAhead, to.scheduleAhead) + 0.1;
 
-  const fromGrid = gridOf(fromAnalysis);
-  const toGrid = gridOf(toAnalysis);
+  // --- PHASE 4 TASK B1: Apply overrides BEFORE scoring (fix the evidence) ---
+  const { from: overriddenFrom, to: overriddenTo, overridesApplied } = applyOverrides(
+    fromAnalysis,
+    toAnalysis,
+    fromOverrides,
+    toOverrides,
+  );
+  // Use overridden analyses for all subsequent computations
+  const fromAnalysisForScoring = overriddenFrom;
+  const toAnalysisForScoring = overriddenTo;
+
+  const fromGrid = gridOf(fromAnalysisForScoring);
+  const toGrid = gridOf(toAnalysisForScoring);
   const outRate = from.timeline.rateAt(now) || 1;
 
   // If no outgoing grid at all, only crossfade is possible
-  if (fromGrid === null || fromAnalysis.gridConfidence < MIN_GRID_CONFIDENCE) {
+  if (fromGrid === null || fromAnalysisForScoring.gridConfidence < MIN_GRID_CONFIDENCE) {
     return scheduleFallback(req, earliest, 'this song has no beat grid at its end');
   }
 
@@ -540,9 +698,8 @@ export function scheduleWithStyleScorer(
     );
   }
 
-  // Compute vocal overlap for the planned blend window
-  // We need a provisional blend window to compute this; use effectiveBlendBars as estimate
-  const effBars = effectiveBlendBars(requestedBars, fromAnalysis.gridConfidence, toAnalysis.gridConfidence);
+  // Compute provisional blend window for vocal overlap
+  const effBars = effectiveBlendBars(requestedBars, fromAnalysisForScoring.gridConfidence, toAnalysisForScoring.gridConfidence);
   const durationSec = effBars * BEATS_PER_BAR * (60 / (fromGrid.bpm * outRate));
   const blendInputSec = durationSec * outRate;
 
@@ -553,9 +710,9 @@ export function scheduleWithStyleScorer(
     const earliestTrack = from.timeline.trackTimeAt(earliest) ?? fromPos;
     provisionalMixOut = downbeatAtOrAfter(fromGrid, earliestTrack);
   } else {
-    const outro = mixOutAnchor(fromAnalysis);
+    const outro = mixOutAnchor(fromAnalysisForScoring);
     provisionalMixOut = phraseAtOrBefore(fromGrid, outro - blendInputSec);
-    const latestStart = fromAnalysis.durationSec - blendInputSec - fromGrid.barSec;
+    const latestStart = fromAnalysisForScoring.durationSec - blendInputSec - fromGrid.barSec;
     provisionalMixOut = Math.min(provisionalMixOut, phraseAtOrBefore(fromGrid, latestStart));
     if (provisionalMixOut < (from.expectedTrackTime ?? 0)) {
       const earliestTrack = from.timeline.trackTimeAt(earliest) ?? (from.expectedTrackTime ?? 0);
@@ -567,32 +724,75 @@ export function scheduleWithStyleScorer(
   const firstDownbeat = toGrid?.downbeatSec ?? 0;
   const barSec = toGrid?.barSec ?? 1;
   const capByBars = firstDownbeat + INCOMING_MAX_ADVANCE_BARS * barSec;
-  const capByFraction = firstDownbeat + (MAX_INCOMING_SKIP_FRACTION * toAnalysis.durationSec);
-  const hardCap = toGrid ? Math.min(capByBars, capByFraction, toAnalysis.durationSec - barSec) : toAnalysis.durationSec;
-  const provisionalMixIn = toGrid ? Math.min(downbeatAtOrAfter(toGrid, firstDownbeat), hardCap) : Math.min(toAnalysis.introEndSec ?? 0, 1);
+  const capByFraction = firstDownbeat + (MAX_INCOMING_SKIP_FRACTION * toAnalysisForScoring.durationSec);
+  const hardCap = toGrid ? Math.min(capByBars, capByFraction, toAnalysisForScoring.durationSec - barSec) : toAnalysisForScoring.durationSec;
+  const provisionalMixIn = toGrid ? Math.min(downbeatAtOrAfter(toGrid, firstDownbeat), hardCap) : Math.min(toAnalysisForScoring.introEndSec ?? 0, 1);
 
-  const vocalOverlap = toGrid
-    ? plannedVocalOverlap(
-        fromAnalysis.vocals ?? [],
-        toAnalysis.vocals ?? [],
+  // --- PHASE 4 TASK A2: Stem-backed vocal overlap ---
+  // Compute span hash for stem cache lookup (use overridden analyses)
+  const outSpanHash = stemSpanHash(fromAnalysisForScoring.fileKey, provisionalMixOut, provisionalMixOut + blendInputSec, 'tail');
+  const inSpanHash = stemSpanHash(toAnalysisForScoring.fileKey, provisionalMixIn, provisionalMixIn + durationSec, 'head');
+  const spanHash = `${outSpanHash}|${inSpanHash}`;
+
+  // Check if stems are already available for this span (use overridden analyses)
+  const stemsAvailable = fromAnalysisForScoring.stems?.spanHash === spanHash &&
+    fromAnalysisForScoring.stems?.out !== null &&
+    toAnalysisForScoring.stems?.spanHash === spanHash &&
+    toAnalysisForScoring.stems?.in !== null;
+
+  let vocalOverlapResult = { overlap: 0 as number | null, stemUsed: false, qualitySdrDb: -100 };
+
+  if (toGrid) {
+    // First compute masked overlap to decide if we need stems
+    const maskedOverlap = plannedVocalOverlap(
+      fromAnalysisForScoring.vocals ?? [],
+      toAnalysisForScoring.vocals ?? [],
+      provisionalMixOut,
+      provisionalMixOut + blendInputSec * stretchRatio,
+      provisionalMixIn,
+      stretchRatio,
+    );
+
+    // If masked overlap exceeds gate and stems aren't cached, request stem analysis
+    // (fire-and-forget; the stem result will be available for next transition)
+    if ((maskedOverlap ?? 0) > 0.15 && !stemsAvailable) {
+      analyzer.requestStem(fromAnalysisForScoring.fileKey, fromAnalysisForScoring.tags, outSpanHash, 'tail', { urgent: false });
+      analyzer.requestStem(toAnalysisForScoring.fileKey, toAnalysisForScoring.tags, inSpanHash, 'head', { urgent: false });
+    }
+
+    // Use stem-backed overlap if available, otherwise masked
+    if (stemsAvailable) {
+      // Combine stems from both tracks into a single Stems object for stemBackedVocalOverlap
+      const combinedStems: Stems = {
+        out: fromAnalysisForScoring.stems!.out!,
+        in: toAnalysisForScoring.stems!.in!,
+        spanHash,
+      };
+      vocalOverlapResult = stemBackedVocalOverlap(
+        combinedStems,
+        fromAnalysisForScoring.vocals ?? [],
+        toAnalysisForScoring.vocals ?? [],
         provisionalMixOut,
-        provisionalMixOut + blendInputSec * (toGrid ? stretchRatio : 1),
+        provisionalMixOut + blendInputSec * stretchRatio,
         provisionalMixIn,
         stretchRatio,
-      )
-    : null;
+      );
+    } else {
+      vocalOverlapResult = { overlap: maskedOverlap, stemUsed: false, qualitySdrDb: -100 };
+    }
+  }
 
   // Residual LUFS delta after compensation
-  const outLufs = mixLufsOf(fromAnalysis, 'tail');
-  const inLufs = mixLufsOf(toAnalysis, 'head');
+  const outLufs = mixLufsOf(fromAnalysisForScoring, 'tail');
+  const inLufs = mixLufsOf(toAnalysisForScoring, 'head');
   const rawDeltaLufs = outLufs !== null && inLufs !== null ? outLufs - inLufs : null;
   const appliedCompensationDb = rawDeltaLufs !== null ? Math.max(-6, Math.min(6, rawDeltaLufs)) : null;
   const residualDeltaLufs = rawDeltaLufs !== null && appliedCompensationDb !== null ? rawDeltaLufs - appliedCompensationDb : null;
 
   // Energy continuity across the join
   const energyContinuity = computeEnergyContinuity(
-    fromAnalysis,
-    toAnalysis,
+    fromAnalysisForScoring,
+    toAnalysisForScoring,
     provisionalMixOut,
     provisionalMixOut + blendInputSec,
     provisionalMixIn,
@@ -600,21 +800,23 @@ export function scheduleWithStyleScorer(
   );
 
   // Low-band energy at join for FILTER gesture selection
-  const outLowEnergyAtJoin = computeLowEnergyAtJoin(fromAnalysis, provisionalMixOut, 2);
-  const inLowEnergyAtJoin = toGrid ? computeLowEnergyAtJoin(toAnalysis, provisionalMixIn, 2) : null;
+  const outLowEnergyAtJoin = computeLowEnergyAtJoin(fromAnalysisForScoring, provisionalMixOut, 2);
+  const inLowEnergyAtJoin = toGrid ? computeLowEnergyAtJoin(toAnalysisForScoring, provisionalMixIn, 2) : null;
 
   // Prepare loop plan data for LOOP candidate
   const loopPlanData = loopPlan
     ? { outBars: loopPlan.out.bars, inBars: loopPlan.in.bars, fold: loopPlan.fold }
     : null;
 
-  // Build scorer input
+  // Build scorer input with stem information (using overridden analyses)
   const scorerInput: StyleScorerInput = {
-    out: fromAnalysis,
-    inn: toAnalysis,
-    outGridConf: fromAnalysis.gridConfidence,
-    inGridConf: toAnalysis.gridConfidence,
-    vocalOverlap,
+    out: fromAnalysisForScoring,
+    inn: toAnalysisForScoring,
+    outGridConf: fromAnalysisForScoring.gridConfidence,
+    inGridConf: toAnalysisForScoring.gridConfidence,
+    vocalOverlap: vocalOverlapResult.overlap,
+    vocalOverlapStemUsed: vocalOverlapResult.stemUsed,
+    stemQualitySdrDb: vocalOverlapResult.qualitySdrDb,
     stretchRatio,
     residualDeltaLufs,
     loopPlan: loopPlanData,
@@ -624,85 +826,118 @@ export function scheduleWithStyleScorer(
   };
 
   // Score all candidates
-  const { style, score, rejectedStylesAndWhy, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, gestureSeconds, rejectedGesturesAndWhy, filterGateReason } = scoreStyles(scorerInput);
+  const { style, score, rejectedStylesAndWhy, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, gestureSeconds, rejectedGesturesAndWhy, filterGateReason, stemUsed } = scoreStyles(scorerInput);
 
   // Convert rejected styles to telemetry format
   const rejections = rejectedStylesAndWhy.map((r) => ({ style: r.style as MixStyle, reason: r.reason }));
   // Convert rejected gestures to telemetry format
   const gestureRejections = rejectedGesturesAndWhy.map((r) => ({ gesture: r.gesture as MixGesture, reason: r.reason }));
 
-  // Dispatch to the appropriate scheduler based on chosen style
-  switch (style) {
+  // --- PHASE 4 TASK B1: Apply planOverride AFTER scoring (replace specified outputs) ---
+  const planOverride = toOverrides?.planOverride ?? fromOverrides?.planOverride;
+  let finalStyle: string = style;
+  let finalBars = bars;
+  let finalGesture = gesture;
+  let finalGestureSeconds = gestureSeconds;
+  let overrideForced = false;
+
+  if (planOverride) {
+    if (planOverride.style) {
+      finalStyle = planOverride.style;
+      overrideForced = true;
+    }
+    if (planOverride.overlapBars !== undefined) {
+      finalBars = planOverride.overlapBars;
+    }
+    if (planOverride.gesture) {
+      finalGesture = planOverride.gesture;
+      // gestureSeconds would need recomputation; for now keep as-is or set to 0 for 'none'
+      if (planOverride.gesture === 'none') finalGestureSeconds = 0;
+    }
+    // entryBeat is handled in the individual schedulers (scheduleTransition, etc.)
+  }
+
+  // Dispatch to the appropriate scheduler based on chosen (possibly overridden) style
+  switch (finalStyle) {
     case 'loop':
       if (!loopPlan) {
-        // Should not happen — LOOP gate requires loopPlan
         return scheduleFallback(req, earliest, 'loop selected but no loop plan');
       }
       // LOOP is scheduled separately in autodj.ts via scheduleLoop
-      // This path should not be reached from here; autodj calls scheduleLoop directly
       return scheduleFallback(req, earliest, 'loop not scheduled here');
 
-    case 'blend':
-      // Use the scored bars (4/8/16) instead of requestedBars
-      const blendReq: TransitionRequest = { ...req, bars };
-      const blendPlan = scheduleTransition(blendReq);
-      // Phase 3 Task 2: the chosen delay throws only from the outgoing deck
-      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, blendPlan);
-      // Phase 3 Task 4: the chosen reverb blooms the outgoing deck's melodic close
-      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, blendPlan);
-      // Override bass swap if not allowed
-      if (!bassSwapAllowed) {
-        // The scheduler already handles short blends (<8 bars) with gentle swap
-        // but if explicitly disallowed by LUFS gate, we'd need to adjust
-        // For now, the scheduleTransition handles bars < 8 with SHORT_BLEND_KILL_DB
+        case 'crossfade':
+      // Forced crossfade: use plain fallback
+      return scheduleFallback(req, earliest, overrideForced ? 'forced crossfade' : 'unknown style from scorer');
+
+case 'blend': {
+      // Use the scored (or overridden) bars instead of requestedBars
+      const blendReq: TransitionRequest = { ...req, bars: finalBars };
+      // Pass entryBeat override to the scheduler if specified
+      if (planOverride?.entryBeat !== undefined) {
+        blendReq.fromOverrides = { ...blendReq.fromOverrides, planOverride: { ...planOverride, entryBeat: planOverride.entryBeat } };
       }
-      return { ...blendPlan, style: 'blend', reason: null, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+      const blendPlan = scheduleTransition(blendReq);
+      if (finalGesture === 'delay' || finalGesture === 'both') engageDelayGesture(from, fromGrid!, outRate, blendPlan);
+      if (finalGesture === 'reverb' || finalGesture === 'both') engageReverbGesture(from, fromGrid!, outRate, blendPlan);
+      const resultPlan: TransitionPlan = { ...blendPlan, style: 'blend', reason: null, rejectedStylesAndWhy: rejections, gesture: finalGesture, gestureSeconds: finalGestureSeconds, rejectedGesturesAndWhy: gestureRejections, stemUsed };
+      // Add overrideForced flag for telemetry
+      return { ...resultPlan, overridesApplied: overrideForced ? [...overridesApplied, 'overrideForced=true'] : overridesApplied };
+    }
 
     case 'filter': {
-      // Phase 3 Task 5: two-kick filter caps at 4 bars, impossible-tempo filter keeps 8 bars
       const filterMaxBars = filterGateReason === 'two-kicks' ? FILTER_MAX_OVERLAP_BARS : FILTER_MAX_BARS;
       const filterReq: TransitionRequest = { ...req, bars: Math.min(requestedBars, filterMaxBars) };
+      if (planOverride?.entryBeat !== undefined) {
+        filterReq.fromOverrides = { ...filterReq.fromOverrides, planOverride: { ...planOverride, entryBeat: planOverride.entryBeat } };
+      }
       const filterReason = filterGateReason === 'two-kicks'
         ? 'two kicks at join'
         : (toGrid
             ? `tempos ${Math.round(Math.abs(stretchRatio - 1) * 100)}% apart`
             : 'next song has no beat grid');
       const filterPlan = scheduleFilterMix(filterReq, earliest, fromGrid!, toGrid, filterReason);
-      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, filterPlan);
-      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, filterPlan);
-      return { ...filterPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+      if (finalGesture === 'delay' || finalGesture === 'both') engageDelayGesture(from, fromGrid!, outRate, filterPlan);
+      if (finalGesture === 'reverb' || finalGesture === 'both') engageReverbGesture(from, fromGrid!, outRate, filterPlan);
+      const resultPlan: TransitionPlan = { ...filterPlan, rejectedStylesAndWhy: rejections, gesture: finalGesture, gestureSeconds: finalGestureSeconds, rejectedGesturesAndWhy: gestureRejections, stemUsed: false };
+      return { ...resultPlan, overridesApplied: overrideForced ? [...overridesApplied, 'overrideForced=true'] : overridesApplied };
     }
     case 'fade': {
-      // FADE = phrase-aligned blend at 6-8s (confidence-scaled)
-      // If grids aren't usable, fall back to plain crossfade (scheduleFallback)
-      const fadeBars = Math.min(bars, 8); // cap at 8 bars for fade
+      const fadeBars = Math.min(finalBars, 8);
       const fadeReq: TransitionRequest = { ...req, bars: fadeBars };
+      if (planOverride?.entryBeat !== undefined) {
+        fadeReq.fromOverrides = { ...fadeReq.fromOverrides, planOverride: { ...planOverride, entryBeat: planOverride.entryBeat } };
+      }
       const gridsUsable =
         fromGrid !== null &&
         toGrid !== null &&
-        fromAnalysis.gridConfidence >= MIN_GRID_CONFIDENCE &&
-        toAnalysis.gridConfidence >= MIN_GRID_CONFIDENCE;
+        fromAnalysisForScoring.gridConfidence >= MIN_GRID_CONFIDENCE &&
+        toAnalysisForScoring.gridConfidence >= MIN_GRID_CONFIDENCE;
       const fadePlan = gridsUsable
         ? scheduleTransition(fadeReq)
         : scheduleFallback(req, earliest, 'grids not usable for phrase-aligned fade');
-      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, fadePlan);
-      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, fadePlan);
-      // Use the plan's actual style (crossfade when grids not usable, fade when they are)
-      return { ...fadePlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+      if (finalGesture === 'delay' || finalGesture === 'both') engageDelayGesture(from, fromGrid!, outRate, fadePlan);
+      if (finalGesture === 'reverb' || finalGesture === 'both') engageReverbGesture(from, fromGrid!, outRate, fadePlan);
+      const resultPlan: TransitionPlan = { ...fadePlan, rejectedStylesAndWhy: rejections, gesture: finalGesture, gestureSeconds: finalGestureSeconds, rejectedGesturesAndWhy: gestureRejections, stemUsed: false };
+      return { ...resultPlan, overridesApplied: overrideForced ? [...overridesApplied, 'overrideForced=true'] : overridesApplied };
     }
 
     case 'gap': {
       const gapPlan = scheduleGapMix(req);
-      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, gapPlan);
-      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, gapPlan);
-      return { ...gapPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+      if (finalGesture === 'delay' || finalGesture === 'both') engageDelayGesture(from, fromGrid!, outRate, gapPlan);
+      if (finalGesture === 'reverb' || finalGesture === 'both') engageReverbGesture(from, fromGrid!, outRate, gapPlan);
+      const resultPlan: TransitionPlan = { ...gapPlan, rejectedStylesAndWhy: rejections, gesture: finalGesture, gestureSeconds: finalGestureSeconds, rejectedGesturesAndWhy: gestureRejections, stemUsed: false };
+      return { ...resultPlan, overridesApplied: overrideForced ? [...overridesApplied, 'overrideForced=true'] : overridesApplied };
     }
 
     default: {
       const fallbackPlan = scheduleFallback(req, earliest, 'unknown style from scorer');
-      if (gesture === 'delay' || gesture === 'both') engageDelayGesture(from, fromGrid!, outRate, fallbackPlan);
-      if (gesture === 'reverb' || gesture === 'both') engageReverbGesture(from, fromGrid!, outRate, fallbackPlan);
-      return { ...fallbackPlan, rejectedStylesAndWhy: rejections, gesture, gestureSeconds, rejectedGesturesAndWhy: gestureRejections };
+      if (finalGesture === 'delay' || finalGesture === 'both') engageDelayGesture(from, fromGrid!, outRate, fallbackPlan);
+      if (finalGesture === 'reverb' || finalGesture === 'both') engageReverbGesture(from, fromGrid!, outRate, fallbackPlan);
+      const resultPlan: TransitionPlan = { ...fallbackPlan, rejectedStylesAndWhy: rejections, gesture: finalGesture, gestureSeconds: finalGestureSeconds, rejectedGesturesAndWhy: gestureRejections, stemUsed: false };
+      return { ...resultPlan, overridesApplied: overrideForced ? [...overridesApplied, 'overrideForced=true'] : overridesApplied };
     }
   }
 }
+
+

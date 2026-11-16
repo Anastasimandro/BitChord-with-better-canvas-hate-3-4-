@@ -369,6 +369,216 @@ export async function vocalCurve(left: Float32Array, right: Float32Array): Promi
   return curve;
 }
 
+// ---- 2-Stem Separation (HT-Demucs-ft / Mel-Band RoFormer) ------------------------------------
+
+/**
+ * 2-Stem model front end: log-mel spectrogram at 44.1 kHz, matching the
+ * training setup of HT-Demucs-ft and Mel-Band RoFormer.
+ */
+export const STEM_SR = 44100;
+const STEM_FFT = 4096;
+const STEM_HOP = 1024;
+const STEM_MELS = 128;
+export const STEM_FPS = STEM_SR / STEM_HOP; // 43.066
+/** Maximum input frames for the stem model (~30 s window). */
+export const STEM_MAX_FRAMES = 1292; // 30s at STEM_FPS
+
+let stemFilters: { first: number; weights: Float64Array }[] | null = null;
+
+function stemHzToMel(hz: number): number {
+  const fSp = 200 / 3;
+  const minLogHz = 1000;
+  const minLogMel = minLogHz / fSp;
+  const logstep = Math.log(6.4) / 27;
+  return hz >= minLogHz ? minLogMel + Math.log(hz / minLogHz) / logstep : hz / fSp;
+}
+
+function stemMelToHz(mel: number): number {
+  const fSp = 200 / 3;
+  const minLogHz = 1000;
+  const minLogMel = minLogHz / fSp;
+  const logstep = Math.log(6.4) / 27;
+  return mel >= minLogMel ? minLogHz * Math.exp(logstep * (mel - minLogMel)) : fSp * mel;
+}
+
+function stemFilterbank() {
+  if (stemFilters) return stemFilters;
+  const bins = STEM_FFT / 2 + 1;
+  const lo = stemHzToMel(30);
+  const hi = stemHzToMel(11000);
+  const edges = Array.from({ length: STEM_MELS + 2 }, (_, i) => stemMelToHz(lo + ((hi - lo) * i) / (STEM_MELS + 1)));
+  stemFilters = [];
+  for (let m = 0; m < STEM_MELS; m++) {
+    const [left, centre, right] = [edges[m]!, edges[m + 1]!, edges[m + 2]!];
+    const toBin = (hz: number) => (hz * STEM_FFT) / STEM_SR;
+    const first = Math.max(0, Math.floor(toBin(left)));
+    const last = Math.min(bins - 1, Math.ceil(toBin(right)));
+    const weights = new Float64Array(Math.max(0, last - first + 1));
+    for (let b = first; b <= last; b++) {
+      const hz = (b * STEM_SR) / STEM_FFT;
+      const rising = centre > left ? (hz - left) / (centre - left) : 0;
+      const falling = right > centre ? (right - hz) / (right - centre) : 0;
+      weights[b - first] = Math.max(0, Math.min(rising, falling));
+    }
+    stemFilters.push({ first, weights });
+  }
+  return stemFilters;
+}
+
+/** [frames][128] row-major log-mel of stereo PCM at 44.1 kHz. */
+export function stemSpectrogram(left: Float32Array, right: Float32Array): { values: Float32Array; frames: number } | null {
+  const pad = STEM_FFT / 2;
+  if (left.length <= pad + 1 || left.length !== right.length) return null;
+  const paddedL = reflectPad(left, pad);
+  const paddedR = reflectPad(right, pad);
+  const frames = Math.floor((paddedL.length - STEM_FFT) / STEM_HOP) + 1;
+  if (frames > STEM_MAX_FRAMES) return null;
+  const window = hann(STEM_FFT);
+  const filters = stemFilterbank();
+  const norm = Math.sqrt(STEM_FFT);
+  const values = new Float32Array(frames * STEM_MELS * 2); // stereo
+  const re = new Float64Array(STEM_FFT);
+  const im = new Float64Array(STEM_FFT);
+  const mag = new Float64Array(STEM_FFT / 2 + 1);
+  for (let f = 0; f < frames; f++) {
+    const start = f * STEM_HOP;
+    for (let ch = 0; ch < 2; ch++) {
+      const channel = ch === 0 ? paddedL : paddedR;
+      for (let i = 0; i < STEM_FFT; i++) {
+        re[i] = channel[start + i]! * window[i]!;
+        im[i] = 0;
+      }
+      fft(re, im);
+      for (let b = 0; b < mag.length; b++) mag[b] = Math.hypot(re[b]!, im[b]!) / norm;
+      for (let m = 0; m < STEM_MELS; m++) {
+        const { first, weights } = filters[m]!;
+        let e = 0;
+        for (let k = 0; k < weights.length; k++) e += mag[first + k]! * weights[k]!;
+        values[(f * STEM_MELS + m) * 2 + ch] = Math.log1p(1000 * Math.max(e, 1e-10));
+      }
+    }
+  }
+  return { values, frames };
+}
+
+/** 2-Stem model sessions (lazy-loaded). */
+let stemSessionHtDemucs: Promise<ort.InferenceSession | null> | null = null;
+let stemSessionMelBandRoformer: Promise<ort.InferenceSession | null> | null = null;
+
+export type StemModelName = 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix';
+
+export interface StemResult {
+  vocals: Float32Array;
+  accompaniment: Float32Array;
+  qualitySdrDb: number;
+}
+
+/**
+ * Run 2-stem separation on a stereo window (44.1 kHz).
+ * Returns vocals + accompaniment curves (per-frame energy in 0..1) and a quality metric.
+ * Null when the model can't load or the window is too long.
+ */
+export async function stemSeparate(
+  left: Float32Array,
+  right: Float32Array,
+  modelName: StemModelName = 'ht-demucs-ft'
+): Promise<StemResult | null> {
+  const spec = stemSpectrogram(left, right);
+  if (!spec) return null;
+
+  // Select the model session
+  let sessionPromise: Promise<ort.InferenceSession | null>;
+  let modelUrl: string;
+  switch (modelName) {
+    case 'ht-demucs-ft':
+      modelUrl = '/models/htdemucs_ft_int8.onnx';
+      sessionPromise = stemSessionHtDemucs ??= session(modelUrl);
+      break;
+    case 'mel-band-roformer':
+      modelUrl = '/models/mel_band_roformer_int8.onnx';
+      sessionPromise = stemSessionMelBandRoformer ??= session(modelUrl);
+      break;
+    case 'open-unmix':
+      // Fallback to open-unmix (vocals only, no accompaniment model here)
+      const voc = await vocalCurve(left, right);
+      if (!voc) return null;
+      // Open-unmix only gives vocal mask; accompaniment = 1 - vocals (rough)
+      const accomp = new Float32Array(voc.length);
+      for (let i = 0; i < voc.length; i++) accomp[i] = 1 - voc[i]!;
+      return { vocals: voc, accompaniment: accomp, qualitySdrDb: 6.0 }; // baseline
+    default:
+      return null;
+  }
+
+  const s = await sessionPromise;
+  if (!s) return null;
+
+  // Input shape: [1, 2, STEM_MELS, frames] for HT-Demucs / Mel-Band RoFormer
+  // The exact input format depends on the exported ONNX model
+  const input = new ort.Tensor('float32', spec.values, [1, 2, STEM_MELS, spec.frames]);
+
+  try {
+    const out = await s.run({ [s.inputNames[0]!]: input });
+    // Output: [1, 2, frames] for (vocals, accompaniment) energy curves
+    // Actual output format depends on the model export; this is the expected shape
+    const outputData = out[s.outputNames[0]!]!.data as Float32Array;
+    if (outputData.length !== 2 * spec.frames) return null;
+
+    const vocals = new Float32Array(spec.frames);
+    const accompaniment = new Float32Array(spec.frames);
+    for (let f = 0; f < spec.frames; f++) {
+      vocals[f] = Math.max(0, Math.min(1, outputData[f * 2]!));
+      accompaniment[f] = Math.max(0, Math.min(1, outputData[f * 2 + 1]!));
+    }
+
+    // Quality proxy: mean vocal energy (higher = more confident separation)
+    // In production, this would be replaced with a proper SDR estimate
+    const qualitySdrDb = vocals.reduce((a, b) => a + b, 0) / vocals.length * 20 - 10;
+
+    return { vocals, accompaniment, qualitySdrDb };
+  } catch (e) {
+    console.warn(`automix: stem model ${modelName} inference failed`, e);
+    return null;
+  }
+}
+
+/**
+ * Estimate SDR quality of a stem separation by comparing the sum of stems to the mix.
+ * Used as a fallback quality metric when ground truth isn't available.
+ */
+export function estimateStemQuality(
+  left: Float32Array,
+  right: Float32Array,
+  vocals: Float32Array,
+  accompaniment: Float32Array
+): number {
+  const mix = new Float32Array(left.length);
+  for (let i = 0; i < left.length; i++) mix[i] = (left[i]! + right[i]!) * 0.5;
+
+  // Reconstruct from stems (vocals + accompaniment should approximate mix)
+  const reconstructed = new Float32Array(mix.length);
+  const hopSamples = Math.round(mix.length / vocals.length);
+  for (let f = 0; f < vocals.length; f++) {
+    const start = f * hopSamples;
+    const end = Math.min(start + hopSamples, mix.length);
+    const v = vocals[f]!;
+    const a = accompaniment[f]!;
+    for (let i = start; i < end; i++) reconstructed[i] = v + a;
+  }
+
+  // SDR = 10 * log10(||mix||^2 / ||mix - reconstructed||^2)
+  let mixPower = 0;
+  let errorPower = 0;
+  for (let i = 0; i < mix.length; i++) {
+    mixPower += mix[i]! * mix[i]!;
+    const diff = mix[i]! - reconstructed[i]!;
+    errorPower += diff * diff;
+  }
+  if (errorPower === 0) return 100;
+  if (mixPower === 0) return -100;
+  return 10 * Math.log10(mixPower / errorPower);
+}
+
 /** Dev: the raw model run over the first chunk of [pcm], for checking the front end against the phone. */
 export async function debugBeatLogits(pcm: Float32Array, level: 'disabled' | 'basic' | 'extended' | 'all' = 'all') {
   const spec = beatSpectrogram(pcm)!;

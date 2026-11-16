@@ -64,6 +64,10 @@ export interface TransitionEvent {
   gestureSeconds: number;
   /** Phase 3: gestures considered and rejected, with reasons. */
   rejectedGesturesAndWhy: RejectedGesture[];
+  /** Phase 4 Task A2: whether the blend used stem-backed separation. */
+  stemUsed?: boolean;
+  /** Phase 4 Task B1: overrides that were applied for this transition. */
+  overridesApplied?: string[];
 }
 
  /** A user advance of the incoming track counts only this long after the handoff. */

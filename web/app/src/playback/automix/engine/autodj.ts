@@ -1,4 +1,4 @@
-// Adapted from AutoMix's src/lib/engine/autodj.ts (https://github.com/heydavidf/automix),
+﻿// Adapted from AutoMix's src/lib/engine/autodj.ts (https://github.com/heydavidf/automix),
 // Copyright (C) 2026 David Finnegan. AGPL-3.0-only: see ../LICENSE and ../NOTICE.md.
 //
 // BitChord: AutoMix picks every next track from a local library. Here the
@@ -681,7 +681,16 @@ export class AutoDJ {
 
     // Use the style scorer to pick the best style and schedule it
     this.plan = scheduleWithStyleScorer(
-      { from, to, fromAnalysis: cur, toAnalysis: next, bars: this.transitionBars, forceNow },
+      {
+        from,
+        to,
+        fromAnalysis: cur,
+        toAnalysis: next,
+        bars: this.transitionBars,
+        forceNow,
+        fromOverrides: cur.manualOverrides,
+        toOverrides: next.manualOverrides,
+      },
       this.loopPlan,
     );
 
@@ -750,6 +759,8 @@ export class AutoDJ {
       gesture,
       gestureSeconds,
       rejectedGesturesAndWhy,
+      stemUsed: plan.stemUsed,
+      overridesApplied: plan.overridesApplied,
     };
   }
 
@@ -1117,3 +1128,6 @@ function releaseWhenSettled(deck: Deck, isCurrent: () => boolean) {
   };
   setTimeout(check, 1000);
 }
+
+
+

@@ -2,7 +2,8 @@ import { useEffect, useReducer, useState } from 'react';
 import { useParty } from '@/party/listenTogether';
 import type { AutoDJSnapshot } from '@/playback/automix';
 import type { analyzer as Analyzer } from '@/playback/automix/analysis/analyzer';
-import { mixReport, type ReportStats, type MixGesture } from '@/playback/automix/telemetry';
+import { mixReport, type ReportStats, type MixGesture, loadEvents, type TransitionEvent } from '@/playback/automix/telemetry';
+import { AutomixEditor } from '@/playback/automix/engine/AutomixEditor';
 import type { NowPlaying } from '@/state/player';
 import { usePlayer } from '@/state/player';
 
@@ -17,7 +18,6 @@ export function NerdStats() {
   const automix = usePlayer((s) => s.automix);
   if (!show || !nowPlaying) return null;
   return (
-    // The phone's shadow: free on the dark mesh, and what keeps it legible over a bright music video.
     <div className="mt-1 flex min-w-0 flex-col gap-px type-[500_11px/14px] tabular-nums [text-shadow:0_1px_4px_rgb(0_0_0/0.55)]">
       <span className="truncate text-secondary">{describeStream(nowPlaying) ?? 'Measuring the stream…'}</span>
       {automix && <AutomixLine videoId={nowPlaying.videoId} />}
@@ -34,6 +34,7 @@ export function NerdStats() {
 function MixReport() {
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState<{ session: ReportStats; aggregate: ReportStats } | null>(null);
+  const [pairDetail, setPairDetail] = useState<TransitionEvent | null>(null);
   useEffect(() => {
     if (open) setReport(mixReport());
   }, [open]);
@@ -44,18 +45,39 @@ function MixReport() {
       </button>
     );
   }
+  if (pairDetail) {
+    const [outId, inId] = pairDetail.pair.split('>');
+    return (
+      <div className="flex flex-col gap-px text-tertiary">
+        <button type="button" className="self-start underline decoration-dotted" onClick={() => setPairDetail(null)}>
+          ← back to mix report
+        </button>
+        <AutomixEditor
+          outgoingVideoId={outId ?? ''}
+          incomingVideoId={inId ?? ''}
+          onClose={() => setPairDetail(null)}
+          onSave={() => { /* overrides saved via editor's internal logic */ }}
+        />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-px text-tertiary">
       <button type="button" className="self-start underline decoration-dotted" onClick={() => setOpen(false)}>
         mix report
       </button>
-      {report && <MixReportBody report={report} />}
+      {report && <MixReportBody report={report} onPairClick={setPairDetail} />}
     </div>
   );
 }
 
 /** "loop 3 · filter 2 · crossfade 1 · skip 12% · both grids 80%", sessions and all time. */
-function MixReportBody({ report }: { report: { session: ReportStats; aggregate: ReportStats } }) {
+function MixReportBody({ report, onPairClick }: { report: { session: ReportStats; aggregate: ReportStats }; onPairClick: (e: TransitionEvent) => void }) {
+  const [events, setEvents] = useState<TransitionEvent[]>([]);
+  useEffect(() => {
+    setEvents(loadEvents().slice(-20).reverse());
+  }, []);
+
   const line = (s: ReportStats) => {
     if (!s.total) return 'no transitions recorded yet';
     const styles = s.styles.length ? s.styles.map((st) => `${st.style} ${st.count}`).join(' · ') : 'none';
@@ -73,6 +95,19 @@ function MixReportBody({ report }: { report: { session: ReportStats; aggregate: 
       : '';
     return `${gestures}${skip}`;
   };
+
+  const formatPair = (pair: string) => {
+    const parts = pair.split('>');
+    const out = parts[0] ?? '';
+    const inn = parts[1] ?? '';
+    return `${out.slice(0, 8)}… → ${inn.slice(0, 8)}…`;
+  };
+
+  const formatTime = (ms: number) => {
+    const date = new Date(ms);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+  };
+
   return (
     <>
       <span className="truncate">
@@ -87,8 +122,48 @@ function MixReportBody({ report }: { report: { session: ReportStats; aggregate: 
       <span className="truncate">
         gestures (all time): {gestureLine(report.aggregate)}
       </span>
+      <div className="mt-2 flex flex-col gap-1 border-t border-divider pt-2">
+        <span className="type-caption-2 text-secondary uppercase tracking-wide">recent pairs (tap to edit)</span>
+        {events.length === 0 ? (
+          <span className="type-caption-2 text-tertiary">no transitions recorded yet</span>
+        ) : (
+          events.map((e, i) => (
+            <button
+              key={`${e.pair}-${e.at}`}
+              onClick={() => onPairClick(e)}
+              className="text-left truncate type-caption-2 text-tertiary hover:text-primary py-1 px-2 rounded-row hover:bg-quinary transition-colors"
+              style={{ borderLeft: '3px solid', borderLeftColor: styleColor(e.styleChosen) }}
+            >
+              <span className="font-mono text-[10px] mr-2">{formatTime(e.at)}</span>
+              <span className="font-mono text-[10px] mr-2">{formatPair(e.pair)}</span>
+              <span className="px-1.5 py-0.5 rounded-[3px] bg-quaternary text-[9px]">{e.styleChosen}</span>
+              {e.overridesApplied && e.overridesApplied.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-[3px] bg-key/20 text-key text-[9px]">manual</span>
+              )}
+              {e.gesture !== 'none' && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-[3px] bg-amber/20 text-amber text-[9px]">{e.gesture}</span>
+              )}
+              {e.stemUsed && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-[3px] bg-green/20 text-green text-[9px]">stems</span>
+              )}
+            </button>
+          ))
+        )}
+      </div>
     </>
   );
+}
+
+function styleColor(style: string): string {
+  switch (style) {
+    case 'loop': return '#8b5cf6';
+    case 'blend': return '#22d3ee';
+    case 'filter': return '#ec4899';
+    case 'fade': return '#f59e0b';
+    case 'gap': return '#22c55e';
+    case 'crossfade': return '#6b7280';
+    default: return '#6b7280';
+  }
 }
 
 /** "Opus · 48 kHz · 141 kbps · Stereo · itag 251 · VISIONOS direct", as much as is known. */
@@ -118,7 +193,6 @@ function AutomixLine({ videoId }: { videoId: string }) {
   else if (state?.state === 'scheduled' && state.plan) text = describeBlend(state);
   else if (state?.loop) text = `Automix · loop mix ready · ${describeLoop(state)}`;
   else {
-    // This song is read where it will be mixed out (its ending's grid), the next where it comes in (its opening's).
     const label = (id: string | null, outgoing: boolean) => {
       if (!id || !analyzer) return 'waiting';
       const a = analyzer.get(id);
@@ -136,7 +210,6 @@ function AutomixLine({ videoId }: { videoId: string }) {
     const next = state?.nextKey ?? nextInQueue;
     text = `Automix · this song: ${label(videoId, true)} · next: ${next ? label(next, false) : 'none'}`;
   }
-  // Dimmer than the stream line: that one describes the audio, this one the app.
   return <span className="truncate text-tertiary">{text}</span>;
 }
 
@@ -198,7 +271,6 @@ export function MixWindowHighlight() {
   const videoId = usePlayer((s) => s.nowPlaying?.videoId);
   const duration = usePlayer((s) => s.nowPlaying?.durationSec ?? 0);
   const automix = usePlayer((s) => s.automix);
-  // The last window stays drawn while it fades out.
   const [shown, setShown] = useState(mix);
   useEffect(() => {
     if (mix) setShown(mix);
@@ -208,7 +280,6 @@ export function MixWindowHighlight() {
   if (!w || duration <= 0) return null;
   const left = Math.max(0, Math.min(1, w.startSec / duration));
   const right = Math.max(left, Math.min(1, w.endSec / duration));
-  // once the blend runs, the bar's own fill covers it and breathes on the beat (useScrubber)
   const blending = startsIn !== null && startsIn <= 0;
   return (
     <div

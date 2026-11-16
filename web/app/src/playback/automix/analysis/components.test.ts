@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { TrackAnalysis } from './types';
-import { GRID_VERSION, MISC_VERSION, VOCAL_VERSION, adoptCached, needsHeadEdge, needsLevel0, needsLevel2, needsLevel3 } from './components';
+import type { TrackAnalysis, StemWindow, Stems } from './types';
+import { GRID_VERSION, MISC_VERSION, VOCAL_VERSION, STEM_VERSION, adoptCached, needsHeadEdge, needsLevel0, needsLevel2, needsLevel3 } from './components';
 
 function analysis(fields: Partial<TrackAnalysis>): TrackAnalysis {
   return {
@@ -26,6 +26,17 @@ function analysis(fields: Partial<TrackAnalysis>): TrackAnalysis {
 
 describe('adoptCached (the per-component migration)', () => {
   it('stamps a monolithic record wholesale: no component is re-analysed', () => {
+    // A truly full record includes stems (the new component)
+    const mockStem: StemWindow = {
+      startSec: 0,
+      fps: 43,
+      vocals: [0.1],
+      accompaniment: [0.5],
+      spanHash: 'test-span',
+      model: 'ht-demucs-ft',
+      qualitySdrDb: 8.0,
+    };
+    const mockStems: Stems = { out: mockStem, in: mockStem, spanHash: 'test-span' };
     const full = analysis({
       headBeats: { beats: [0, 0.5, 1], downbeats: [0], bpm: 120, confidence: 0.8 },
       tailBeats: { beats: [199, 199.5], downbeats: [199], bpm: 120, confidence: 0.8 },
@@ -35,11 +46,13 @@ describe('adoptCached (the per-component migration)', () => {
       lufsHead: -14,
       lufsTail: -15,
       vocals: [{ startSec: 0, fps: 43, curve: [0.1] }],
+      stems: mockStems,
     });
     const adopted = adoptCached(full);
     expect(adopted.gridVersion).toBe(GRID_VERSION);
     expect(adopted.vocalVersion).toBe(VOCAL_VERSION);
     expect(adopted.miscVersion).toBe(MISC_VERSION);
+    expect(adopted.stemVersion).toBe(STEM_VERSION);
     expect(needsLevel0(adopted)).toBe(false);
     expect(needsLevel3(adopted)).toBe(false);
   });

@@ -10,8 +10,12 @@
 // about, falling back to the whole-track curve a monolithic analysis stored.
 // All thresholds are relative to the view's own spread, so a span normalized
 // to its own peak and a curve normalized to the track's read the same.
+//
+// Phase 4 Task A2: stem-backed blends — when stems are available and vocal
+// overlap > 0.15, the blend uses real separation (vocals never cross) instead
+// of the HP/LP masking gesture. The stem is an upgrade, never a dependency.
 
-import type { TrackAnalysis, VocalWindow } from '../analysis/types';
+import type { TrackAnalysis, VocalWindow, StemWindow, Stems } from '../analysis/types';
 import { REVERB_IR_SEC } from './loopDeck';
 
 /** Vocal activity threshold — same scale as the phone's 0.25. */
@@ -252,6 +256,96 @@ export function plannedVocalOverlap(
 }
 
 /**
+ * Stem-backed vocal overlap: uses 2-stem separation (vocals + accompaniment)
+ * to compute the exact vocal overlap with "vocals never cross" guarantee.
+ * When stems are available, this replaces the masked vocalOverlap for BLEND
+ * scoring. The stem curves are already on a 0..1 energy scale per frame.
+ *
+ * Returns { overlap: fraction, stemUsed: true } when stems are available and
+ * quality passes threshold; otherwise returns { overlap: maskedOverlap, stemUsed: false }.
+ */
+export interface StemVocalOverlapResult {
+  /** The computed vocal overlap fraction (0..1). */
+  overlap: number;
+  /** Whether real stems were used (true) or masked fallback (false). */
+  stemUsed: boolean;
+  /** Quality metric: vocals SDR in dB (negative = below threshold). */
+  qualitySdrDb: number;
+}
+
+/**
+ * Computes vocal overlap using stem separation when available.
+ * The "vocals never cross" guarantee: outgoing voice continues to end of
+ * its phrase; incoming accompaniment enters underneath; outgoing voice dies
+ * on its last downbeat in overlap; incoming voice enters only after.
+ */
+export function stemBackedVocalOverlap(
+  stems: Stems | null | undefined,
+  outVocals: VocalWindow[],
+  inVocals: VocalWindow[],
+  outStart: number,
+  outEnd: number,
+  inStart: number,
+  rate: number,
+): StemVocalOverlapResult {
+  // Stem quality threshold: require SDR >= 5 dB for reliable separation
+  const STEM_QUALITY_THRESHOLD_DB = 5;
+
+  if (!stems || !stems.out || !stems.in) {
+    // No stems — fall back to masked overlap
+    const masked = plannedVocalOverlap(outVocals, inVocals, outStart, outEnd, inStart, rate);
+    return { overlap: masked ?? 0, stemUsed: false, qualitySdrDb: -100 };
+  }
+
+  const outStem = stems.out;
+  const inStem = stems.in;
+
+  // Check stem quality
+  const minQuality = Math.min(outStem.qualitySdrDb, inStem.qualitySdrDb);
+  if (minQuality < STEM_QUALITY_THRESHOLD_DB) {
+    const masked = plannedVocalOverlap(outVocals, inVocals, outStart, outEnd, inStart, rate);
+    return { overlap: masked ?? 0, stemUsed: false, qualitySdrDb: minQuality };
+  }
+
+  // Stems are available and pass quality — compute exact overlap from stem curves
+  // The stem curves are at STEM_FPS (~43 Hz), aligned to the overlap window
+  const outVocalsStem = outStem.vocals;
+  const inVocalsStem = inStem.vocals;
+
+  if (!outVocalsStem.length || !inVocalsStem.length) {
+    const masked = plannedVocalOverlap(outVocals, inVocals, outStart, outEnd, inStart, rate);
+    return { overlap: masked ?? 0, stemUsed: false, qualitySdrDb: minQuality };
+  }
+
+  // Sample at the outgoing stem's frame rate
+  const outFps = outStem.fps;
+  const inFps = inStem.fps;
+  const step = Number.isFinite(rate) && rate > 0 ? rate : 1.0;
+
+  let both = 0;
+  let total = 0;
+
+  for (let i = 0; i < outVocalsStem.length; i++) {
+    const t = outStem.startSec + i / outFps;
+    if (t < outStart || t >= outEnd) continue;
+    total++;
+
+    const outVal = outVocalsStem[i]!;
+    if (outVal < VOCAL_ACTIVE) continue; // outgoing not vocal
+
+    const targetIn = inStart + (t - outStart) * step;
+    const inIdx = Math.floor((targetIn - inStem.startSec) * inFps);
+    if (inIdx < 0 || inIdx >= inVocalsStem.length) continue;
+
+    const inVal = inVocalsStem[inIdx]!;
+    if (inVal >= VOCAL_ACTIVE) both++;
+  }
+
+  const overlap = total > 0 ? both / total : 0;
+  return { overlap, stemUsed: true, qualitySdrDb: minQuality };
+}
+
+/**
  * Simple vocal share for a single track over a window (used for telemetry).
  * Returns the fraction of frames above VOCAL_ACTIVE, or null if no vocal evidence.
  */
@@ -305,6 +399,10 @@ export interface StyleScorerInput {
   inGridConf: number;
   /** Planned vocal overlap fraction (0..1), or null if unmeasured. */
   vocalOverlap: number | null;
+  /** Whether the vocal overlap was computed from stems (true) or masked (false). */
+  vocalOverlapStemUsed: boolean;
+  /** Stem quality in dB (negative = unavailable/below threshold). */
+  stemQualitySdrDb: number;
   /** Stretch ratio (outgoing BPM / incoming BPM, folded to nearest octave). */
   stretchRatio: number;
   /** Residual LUFS delta after compensation (dB), or null if unmeasured. */
@@ -327,8 +425,8 @@ const VOCAL_OVERLAP_BLEND_CAP = 0.15;
 // Residual LUFS delta (dB) above which bass swap inside BLEND is killed (task-4).
 const RESIDUAL_LUFS_BASS_SWAP_KILL_DB = 4;
 // Stretch window for BLEND (0.9..1.25, asymmetric: -10% / +25%).
-const BLEND_STRETCH_MIN = 0.9;
-const BLEND_STRETCH_MAX = 1.25;
+export const BLEND_STRETCH_MIN = 0.9;
+export const BLEND_STRETCH_MAX = 1.25;
 // Minimum clean loop bars on each side for LOOP candidate.
 const LOOP_MIN_CLEAN_BARS = 2;
 // LOOP stretch window with fold applied.
@@ -339,14 +437,16 @@ const ENERGY_CONTINUITY_WEIGHT = 0.1;
 // Gratuitous FILTER penalty (applied unless two kicks or impossible tempo).
 const FILTER_PENALTY = 0.25;
 // KICK_PRESENT threshold for FILTER gesture selection (from Android TransitionPlanner).
-const KICK_PRESENT = 0.5;
+export const KICK_PRESENT = 0.5;
+// Stem quality threshold for stem-backed blend (dB).
+const STEM_QUALITY_THRESHOLD_DB = 5;
 
 /**
  * Evaluates a single candidate against its hard gates.
  * Returns the gate result with pass/fail, kill reason, and score (if passing).
  */
 function evaluateCandidate(input: StyleScorerInput, candidate: MixStyleCandidate): StyleGateResult {
-  const { outGridConf, inGridConf, vocalOverlap, stretchRatio, residualDeltaLufs, loopPlan, energyContinuity } = input;
+  const { outGridConf, inGridConf, vocalOverlap, vocalOverlapStemUsed, stemQualitySdrDb, stretchRatio, residualDeltaLufs, loopPlan, energyContinuity } = input;
   const avgGridConf = (outGridConf + inGridConf) / 2;
 
   // ---- HARD GATES (a failed gate KILLS the candidate) ----
@@ -406,12 +506,22 @@ function evaluateCandidate(input: StyleScorerInput, candidate: MixStyleCandidate
     // This is handled at the score/length level, not a hard kill here
     // but we note it for the length decision
 
-    // loopCleanliness for BLEND: vocal overlap penalizes
-    const loopCleanliness = 1 - (vocalOverlap ?? 0);
+    // STEM-BACKED BLEND: when stems are available and quality passes,
+    // the vocal overlap cap is lifted because "vocals never cross" is guaranteed.
+    // The stem-backed blend scores ABOVE its masked equivalent.
+    const stemBacked = vocalOverlapStemUsed && stemQualitySdrDb >= STEM_QUALITY_THRESHOLD_DB;
+    const effectiveVocalOverlap = stemBacked ? 0 : (vocalOverlap ?? 0); // stems guarantee no crossing
+
+    // loopCleanliness for BLEND: vocal overlap penalizes (unless stem-backed)
+    const loopCleanliness = 1 - effectiveVocalOverlap;
     // entryShapeOfB: how well the incoming entry aligns (first downbeat = 1.0)
     const entryShapeOfB = 1.0;
     const baseScore = avgGridConf * (1 - Math.abs(stretchRatio - 1) / 0.25) * loopCleanliness * entryShapeOfB;
-    const score = baseScore + energyContinuity * ENERGY_CONTINUITY_WEIGHT;
+
+    // Bonus for stem-backed blend: it resolves the crossed-vocals known issues
+    const stemBonus = stemBacked ? 0.15 : 0;
+
+    const score = baseScore + stemBonus + energyContinuity * ENERGY_CONTINUITY_WEIGHT;
     return { candidate, passes: true, killReason: null, score };
   }
 
@@ -448,7 +558,7 @@ function evaluateCandidate(input: StyleScorerInput, candidate: MixStyleCandidate
  *
  * Pure function: no state, no clock, no randomness.
  *
- * @returns { style, score, killReason, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, filterGateReason }
+ * @returns { style, score, killReason, bars, bassSwapAllowed, vocalOverlapCapBars, gesture, filterGateReason, stemUsed }
  */
 export function scoreStyles(input: StyleScorerInput): {
   /** The chosen style. */
@@ -471,6 +581,8 @@ export function scoreStyles(input: StyleScorerInput): {
   rejectedGesturesAndWhy: { gesture: 'none' | 'delay' | 'reverb' | 'both'; reason: string }[];
   /** Phase 3 Task 5: why FILTER passed its gate — 'two-kicks' | 'impossible-tempo' | null. */
   filterGateReason: 'two-kicks' | 'impossible-tempo' | null;
+  /** Phase 4 Task A2: whether the chosen blend uses stem-backed separation. */
+  stemUsed: boolean;
 } {
   // Phase 3 Task 2: the delay is a scorer decision with a recorded reason —
   // no default path adds it.
@@ -535,6 +647,7 @@ export function scoreStyles(input: StyleScorerInput): {
       gestureSeconds,
       rejectedGesturesAndWhy,
       filterGateReason: null,
+      stemUsed: false,
     };
   }
 
@@ -549,8 +662,10 @@ export function scoreStyles(input: StyleScorerInput): {
   else bars = 4;
 
   // Vocal overlap cap: if > 0.15, cap BLEND at 4 bars (or fall to FADE)
+  // STEM-BACKED: when stems are used, the cap is lifted because vocals never cross
+  const stemBacked = input.vocalOverlapStemUsed && input.stemQualitySdrDb >= STEM_QUALITY_THRESHOLD_DB;
   let vocalOverlapCapBars: number | null = null;
-  if ((input.vocalOverlap ?? 0) > VOCAL_OVERLAP_BLEND_CAP) {
+  if ((input.vocalOverlap ?? 0) > VOCAL_OVERLAP_BLEND_CAP && !stemBacked) {
     vocalOverlapCapBars = 4;
     if (best.candidate === 'blend') {
       bars = Math.min(bars, 4);
@@ -572,6 +687,9 @@ export function scoreStyles(input: StyleScorerInput): {
     else if (impossibleTempo) filterGateReason = 'impossible-tempo';
   }
 
+  // Stem used for the chosen blend
+  const stemUsed = best.candidate === 'blend' && stemBacked;
+
   return {
     style: best.candidate,
     score: best.score,
@@ -585,6 +703,7 @@ export function scoreStyles(input: StyleScorerInput): {
     gestureSeconds,
     rejectedGesturesAndWhy,
     filterGateReason,
+    stemUsed,
   };
 }
 

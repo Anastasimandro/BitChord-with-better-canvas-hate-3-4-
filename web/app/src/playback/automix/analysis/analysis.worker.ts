@@ -17,6 +17,9 @@
 //   energy curve and intro/outro, whole-track LUFS, and the open-unmix
 //   windows for the cache. RhythmExtractor2013 runs only for an edge whose
 //   Beat This! pass failed outright.
+// - L3 (stem): the overlap window — 2-stem separation (vocals + accompaniment)
+//   for the exact span the transition plans to use. Runs at L3/idle or
+//   on-demand, NEVER on the critical path (L0-L2 ladder untouched).
 //
 // One wasm session runs one inference at a time; requests stay sequential
 // (the analyzer sends one and waits).
@@ -26,9 +29,9 @@ import { toCamelot } from './camelot';
 import { integratedLufs } from './loudness';
 import { contentEndOf, isFalseEnding, percentile, type CurveView } from '../engine/policy';
 import { cheapVocalWindow, CHEAP_UNCERTAIN_SHARE } from './cheapvocal';
-import { trackBeats, vocalCurve, VOCAL_FPS, type ModelGrid } from './models';
-import { MISC_VERSION, VOCAL_VERSION } from './components';
-import type { EnergySpan, LocalGrid, TrackAnalysis, VocalWindow, BeatSide } from './types';
+import { trackBeats, vocalCurve, VOCAL_FPS, type ModelGrid, stemSeparate, type StemResult, STEM_FPS } from './models';
+import { MISC_VERSION, VOCAL_VERSION, STEM_VERSION } from './components';
+import type { EnergySpan, LocalGrid, TrackAnalysis, VocalWindow, StemWindow, Stems, BeatSide } from './types';
 import type Essentia from 'essentia.js/dist/essentia.js-core.es.js';
 
 export interface EdgePcm {
@@ -67,6 +70,10 @@ export interface AnalyzeRequest {
   vocalModelWindows?: { offsetSec: number; left: Float32Array; right: Float32Array }[];
   /** L3: run KeyExtractor (the pair-rejection key; never on the critical path). */
   needKey?: boolean;
+  /** L3 (stem): stereo 44.1 kHz window for 2-stem separation over the overlap span. */
+  stemWindow?: { offsetSec: number; left: Float32Array; right: Float32Array; spanHash: string; edge: 'head' | 'tail' };
+  /** Which 2-stem model to use (default: ht-demucs-ft). */
+  stemModel?: 'ht-demucs-ft' | 'mel-band-roformer' | 'open-unmix';
 }
 
 export interface AnalyzeResponse {
@@ -86,6 +93,8 @@ self.onmessage = async (ev: MessageEvent<AnalyzeRequest>) => {
       postMessage({ type: 'result', fileKey: req.fileKey, result: await analyzeEdge(req) } satisfies AnalyzeResponse);
     } else if (req.cheapVocalWindows) {
       postMessage({ type: 'result', fileKey: req.fileKey, result: analyzeCheapVocal(req) } satisfies AnalyzeResponse);
+    } else if (req.stemWindow) {
+      postMessage({ type: 'result', fileKey: req.fileKey, result: await analyzeStem(req) } satisfies AnalyzeResponse);
     } else if (req.samples) {
       postMessage(
         { type: 'result', fileKey: req.fileKey, result: await analyzeWholeTrack(req) } satisfies AnalyzeResponse,
@@ -329,6 +338,48 @@ function analyzeCheapVocal(req: AnalyzeRequest): Partial<TrackAnalysis> & { voca
     if (made.uncertain >= CHEAP_UNCERTAIN_SHARE) uncertain = true;
   }
   return { vocals: windows, vocalVersion: VOCAL_VERSION, vocalUncertain: uncertain };
+}
+
+// ---- L3 (stem): 2-stem separation over the overlap window ----------------------------------
+
+/**
+ * L3 stem analysis: 2-stem separation (vocals + accompaniment) over the
+ * exact overlap window the transition plans to use. Runs at L3/idle or
+ * on-demand, NEVER on the critical path (L0-L2 ladder untouched).
+ * Cached per (trackId, spanHash) with stemVersion.
+ */
+async function analyzeStem(req: AnalyzeRequest): Promise<Partial<TrackAnalysis>> {
+  const stemWindow = req.stemWindow!;
+  const modelName = req.stemModel ?? 'ht-demucs-ft';
+
+  const result = await stemSeparate(stemWindow.left, stemWindow.right, modelName);
+  if (!result) {
+    // Model unavailable or failed — return null stems (caller will fall back)
+    return { stems: { out: null, in: null, spanHash: stemWindow.spanHash }, stemVersion: STEM_VERSION };
+  }
+
+  const stemWindowResult: StemWindow = {
+    startSec: stemWindow.offsetSec,
+    fps: STEM_FPS,
+    vocals: Array.from(result.vocals),
+    accompaniment: Array.from(result.accompaniment),
+    spanHash: stemWindow.spanHash,
+    model: modelName,
+    qualitySdrDb: result.qualitySdrDb,
+  };
+
+  // The edge tells us whether this is for the outgoing (tail) or incoming (head) track
+  if (stemWindow.edge === 'tail') {
+    return {
+      stems: { out: stemWindowResult, in: null, spanHash: stemWindow.spanHash },
+      stemVersion: STEM_VERSION,
+    };
+  } else {
+    return {
+      stems: { out: null, in: stemWindowResult, spanHash: stemWindow.spanHash },
+      stemVersion: STEM_VERSION,
+    };
+  }
 }
 
 // ---- L3: the whole track -------------------------------------------------------------------

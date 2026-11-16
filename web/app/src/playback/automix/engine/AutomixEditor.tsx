@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePlayer } from '@/state/player';
 import { analyzer } from '@/playback/automix/analysis/analyzer';
-import type { TrackAnalysis } from '@/playback/automix/analysis/types';
+import type { TrackAnalysis, CamelotKey } from '@/playback/automix/analysis/types';
 import { scoreStyles, type StyleScorerInput } from '@/playback/automix/engine/policy';
 import { applyOverrides } from '@/playback/automix/engine/transition-scheduler';
 import { PRESET_OVERRIDES, type PresetName, applyPreset } from '@/playback/automix/engine/presets';
@@ -39,8 +39,8 @@ export function AutomixEditor({
   const [gridNudgeBeats, setGridNudgeBeats] = useState<number>(0);
   const [outgoingBpm, setOutgoingBpm] = useState<number | null>(null);
   const [incomingBpm, setIncomingBpm] = useState<number | null>(null);
-  const [outgoingCamelot, setOutgoingCamelot] = useState<string>('');
-  const [incomingCamelot, setIncomingCamelot] = useState<string>('');
+  const [outgoingCamelot, setOutgoingCamelot] = useState<CamelotKey | null>(null);
+  const [incomingCamelot, setIncomingCamelot] = useState<CamelotKey | null>(null);
 
   const [previewing, setPreviewing] = useState(false);
   const [previewPlan, setPreviewPlan] = useState<TransitionPlan | null>(null);
@@ -113,8 +113,20 @@ export function AutomixEditor({
     }
     if (outOverrides?.bpm !== undefined) setOutgoingBpm(outOverrides.bpm);
     if (inOverrides?.bpm !== undefined) setIncomingBpm(inOverrides.bpm);
-    if (outOverrides?.camelot) setOutgoingCamelot(outOverrides.camelot);
-    if (inOverrides?.camelot) setIncomingCamelot(inOverrides.camelot);
+    if (outOverrides?.camelot) {
+      const [numStr, letter] = [outOverrides.camelot.slice(0, -1), outOverrides.camelot.slice(-1).toUpperCase()];
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && (letter === 'A' || letter === 'B')) {
+        setOutgoingCamelot({ num, letter: letter as 'A' | 'B' });
+      }
+    }
+    if (inOverrides?.camelot) {
+      const [numStr, letter] = [inOverrides.camelot.slice(0, -1), inOverrides.camelot.slice(-1).toUpperCase()];
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && (letter === 'A' || letter === 'B')) {
+        setIncomingCamelot({ num, letter: letter as 'A' | 'B' });
+      }
+    }
     if (inOverrides?.gridNudgeBeats !== undefined) setGridNudgeBeats(inOverrides.gridNudgeBeats);
   }, []);
 
@@ -500,15 +512,17 @@ export function AutomixEditor({
   const handleSave = useCallback(async () => {
     const outBpm = outgoingBpm !== null ? outgoingBpm : undefined;
     const inBpm = incomingBpm !== null ? incomingBpm : undefined;
+    const outCamelot = outgoingCamelot ? `${outgoingCamelot.num}${outgoingCamelot.letter}` : undefined;
+    const inCamelot = incomingCamelot ? `${incomingCamelot.num}${incomingCamelot.letter}` : undefined;
     const outOverrides: TrackAnalysis['manualOverrides'] = {
       ...outgoingOverrides,
       bpm: outBpm,
-      camelot: outgoingCamelot || undefined,
+      camelot: outCamelot,
     };
     const inOverrides: TrackAnalysis['manualOverrides'] = {
       ...incomingOverrides,
       bpm: inBpm,
-      camelot: incomingCamelot || undefined,
+      camelot: inCamelot,
       gridNudgeBeats: gridNudgeBeats || undefined,
       planOverride: {
         style: selectedPreset !== 'Auto' ? PRESET_OVERRIDES[selectedPreset as PresetName]!.style : undefined,
@@ -743,8 +757,8 @@ export function AutomixEditor({
                   <label className="type-caption-2 text-tertiary block mb-1">Outgoing</label>
                   <input
                     type="text"
-                    value={outgoingCamelot}
-                    onChange={(e) => setOutgoingCamelot(e.target.value.toUpperCase())}
+                    value={outgoingCamelot ? `${outgoingCamelot.num}${outgoingCamelot.letter}` : ''}
+                    onChange={(e) => { const v = e.target.value.toUpperCase(); const num = parseInt(v.slice(0, -1), 10); const letter = v.slice(-1); if (!isNaN(num) && (letter === 'A' || letter === 'B')) setOutgoingCamelot({ num, letter: letter as 'A' | 'B' }); }}
                     placeholder={outgoing?.camelot ? `${outgoing.camelot.num}${outgoing.camelot.letter}` : 'auto'}
                     className="w-full rounded-row bg-quaternary px-3 py-2 type-title-3"
                     maxLength={3}
@@ -754,8 +768,8 @@ export function AutomixEditor({
                   <label className="type-caption-2 text-tertiary block mb-1">Incoming</label>
                   <input
                     type="text"
-                    value={incomingCamelot}
-                    onChange={(e) => setIncomingCamelot(e.target.value.toUpperCase())}
+                    value={incomingCamelot ? `${incomingCamelot.num}${incomingCamelot.letter}` : ''}
+                    onChange={(e) => { const v = e.target.value.toUpperCase(); const num = parseInt(v.slice(0, -1), 10); const letter = v.slice(-1); if (!isNaN(num) && (letter === 'A' || letter === 'B')) setIncomingCamelot({ num, letter: letter as 'A' | 'B' }); }}
                     placeholder={incoming?.camelot ? `${incoming.camelot.num}${incoming.camelot.letter}` : 'auto'}
                     className="w-full rounded-row bg-quaternary px-3 py-2 type-title-3"
                     maxLength={3}
