@@ -94,6 +94,13 @@ jobs:
           timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
 
+      - name: Pre-install: trigger Gradle platform install
+        run: ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Create android-37 symlink (Gradle installs as android-37.0)
+        run: |
+          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+
       - name: Run NPU Parity Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
 
@@ -180,6 +187,13 @@ jobs:
           timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
 
+      - name: Pre-install: trigger Gradle platform install
+        run: ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Create android-37 symlink (Gradle installs as android-37.0)
+        run: |
+          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+
       - name: Run NPU Benchmark Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
 
@@ -265,6 +279,13 @@ jobs:
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
           timeout 300 adb wait-for-device shell 'while [ -z "$(getprop sys.boot_completed)" ]; do sleep 1; done'
           adb shell input keyevent 82
+
+      - name: Pre-install: trigger Gradle platform install
+        run: ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Create android-37 symlink (Gradle installs as android-37.0)
+        run: |
+          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Check delegate availability
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
