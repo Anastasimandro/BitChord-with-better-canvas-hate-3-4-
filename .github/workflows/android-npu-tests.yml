@@ -15,7 +15,7 @@ on:
       - 'app/src/androidTest/java/com/music/bitchord/playback/smart/BeatTrackerNpuParityTest.kt'
       - 'app/src/androidTest/java/com/music/bitchord/playback/smart/BeatTrackerBenchmarkTest.kt'
       - '.github/workflows/android-npu-tests.yml'
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
