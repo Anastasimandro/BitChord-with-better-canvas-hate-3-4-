@@ -78,15 +78,16 @@ jobs:
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Create android-37 symlink (Gradle looks for android-37, not android-37.0)
+      - name: Create android-37 platform directory (Gradle looks for android-37, not android-37.0)
         run: |
           # The canary channel installs as android-37.0 but Gradle looks for android-37.
-          # Create symlink so Gradle can find the platform. Run ALWAYS (not cache-dependent).
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink android-37 -> android-37.0"
-          elif [ -e "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Symlink android-37 already exists"
+          # COPY (not symlink) so Gradle sees a real directory and doesn't re-install.
+          # Run ALWAYS (not cache-dependent).
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Copied android-37.0 -> android-37"
+          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Directory android-37 already exists"
           else
             echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
             ls -la /opt/android-sdk/platforms/
@@ -195,15 +196,16 @@ jobs:
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Create android-37 symlink (Gradle looks for android-37, not android-37.0)
+      - name: Create android-37 platform directory (Gradle looks for android-37, not android-37.0)
         run: |
           # The canary channel installs as android-37.0 but Gradle looks for android-37.
-          # Create symlink so Gradle can find the platform. Run ALWAYS (not cache-dependent).
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink android-37 -> android-37.0"
-          elif [ -e "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Symlink android-37 already exists"
+          # COPY (not symlink) so Gradle sees a real directory and doesn't re-install.
+          # Run ALWAYS (not cache-dependent).
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Copied android-37.0 -> android-37"
+          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Directory android-37 already exists"
           else
             echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
             ls -la /opt/android-sdk/platforms/
@@ -312,15 +314,16 @@ jobs:
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Create android-37 symlink (Gradle looks for android-37, not android-37.0)
+      - name: Create android-37 platform directory (Gradle looks for android-37, not android-37.0)
         run: |
           # The canary channel installs as android-37.0 but Gradle looks for android-37.
-          # Create symlink so Gradle can find the platform. Run ALWAYS (not cache-dependent).
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink android-37 -> android-37.0"
-          elif [ -e "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Symlink android-37 already exists"
+          # COPY (not symlink) so Gradle sees a real directory and doesn't re-install.
+          # Run ALWAYS (not cache-dependent).
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Copied android-37.0 -> android-37"
+          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Directory android-37 already exists"
           else
             echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
             ls -la /opt/android-sdk/platforms/
