@@ -103,6 +103,8 @@ function computeStemSpanHash(
 
 // Load golden corpus fixture
 const fixturePath = path.resolve(__dirname, '../../../../../../fixtures/golden-corpus.json');
+type PlanOverride = NonNullable<TrackAnalysis['manualOverrides']>['planOverride'];
+type ManualOverrides = NonNullable<TrackAnalysis['manualOverrides']>;
 const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf-8')) as {
   version: number;
   pairs: Array<{
@@ -112,6 +114,11 @@ const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf-8')) as {
     trackB: any;
     expected: any;
     knownIssue?: string;
+    overrides?: {
+      from?: ManualOverrides;
+      to?: ManualOverrides;
+      planOverride?: PlanOverride;
+    };
   }>;
 };
 
