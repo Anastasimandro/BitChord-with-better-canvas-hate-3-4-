@@ -42,12 +42,30 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK (with caching)
-        uses: android-actions/setup-android@v3
+      - name: Cache Android SDK
+        uses: actions/cache@v4
         with:
-          cache-key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          path: /opt/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
 
-      - name: Install API 30 and x86_64 system image
+      - name: Install Android SDK (if not cached)
+        if: steps.cache-android-sdk.outputs.cache-hit != 'true'
+        run: |
+          ANDROID_SDK_ROOT=/opt/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
+
+      - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
@@ -56,7 +74,6 @@ jobs:
         run: |
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
-          # Wait for boot with timeout
           timeout 120 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
@@ -98,12 +115,31 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK (with caching)
-        uses: android-actions/setup-android@v3
+      - name: Cache Android SDK
+        id: cache-android-sdk
+        uses: actions/cache@v4
         with:
-          cache-key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          path: /opt/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
 
-      - name: Install API 30 and x86_64 system image
+      - name: Install Android SDK (if not cached)
+        if: steps.cache-android-sdk.outputs.cache-hit != 'true'
+        run: |
+          ANDROID_SDK_ROOT=/opt/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
+
+      - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
@@ -153,12 +189,31 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Setup Android SDK (with caching)
-        uses: android-actions/setup-android@v3
+      - name: Cache Android SDK
+        id: cache-android-sdk
+        uses: actions/cache@v4
         with:
-          cache-key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          path: /opt/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts', '**/gradle.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
 
-      - name: Install API 30 and x86_64 system image
+      - name: Install Android SDK (if not cached)
+        if: steps.cache-android-sdk.outputs.cache-hit != 'true'
+        run: |
+          ANDROID_SDK_ROOT=/opt/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd $ANDROID_SDK_ROOT/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
+
+      - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
