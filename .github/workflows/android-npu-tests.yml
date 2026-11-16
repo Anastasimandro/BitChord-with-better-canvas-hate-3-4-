@@ -75,22 +75,6 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Fix android-37 platform directory
-        run: |
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
-            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed android-37 platform directory"
-          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for existing android-37"
-          else
-            echo "WARNING: android-37.0 not found"
-            ls -la /opt/android-sdk/platforms/
-          fi
-
       - name: Enable KVM for x86_64 emulator
         run: |
           sudo usermod -a -G kvm $USER
@@ -109,6 +93,27 @@ jobs:
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
+
+      - name: Pre-build to trigger android-37.0 auto-install
+        run: |
+          ./gradlew :app:dependencies --no-daemon -Dandroid.autoInstallSdk=true || true
+          echo "Pre-build completed"
+
+      - name: Fix android-37 platform directory (after auto-install)
+        run: |
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed android-37 platform directory (copied from android-37.0)"
+          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed source.properties for existing android-37"
+          else
+            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            ls -la /opt/android-sdk/platforms/
+          fi
 
       - name: Run NPU Parity Test
         run: |
@@ -181,22 +186,6 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Fix android-37 platform directory
-        run: |
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
-            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed android-37 platform directory"
-          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for existing android-37"
-          else
-            echo "WARNING: android-37.0 not found"
-            ls -la /opt/android-sdk/platforms/
-          fi
-
       - name: Enable KVM for x86_64 emulator
         run: |
           sudo usermod -a -G kvm $USER
@@ -215,6 +204,27 @@ jobs:
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
+
+      - name: Pre-build to trigger android-37.0 auto-install
+        run: |
+          ./gradlew :app:dependencies --no-daemon -Dandroid.autoInstallSdk=true || true
+          echo "Pre-build completed"
+
+      - name: Fix android-37 platform directory (after auto-install)
+        run: |
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed android-37 platform directory (copied from android-37.0)"
+          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed source.properties for existing android-37"
+          else
+            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            ls -la /opt/android-sdk/platforms/
+          fi
 
       - name: Run NPU Benchmark Test
         run: |
@@ -287,22 +297,6 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
 
-      - name: Fix android-37 platform directory
-        run: |
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
-            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed android-37 platform directory"
-          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
-            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
-            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
-            echo "Fixed source.properties for existing android-37"
-          else
-            echo "WARNING: android-37.0 not found"
-            ls -la /opt/android-sdk/platforms/
-          fi
-
       - name: Enable KVM for x86_64 emulator
         run: |
           sudo usermod -a -G kvm $USER
@@ -321,6 +315,27 @@ jobs:
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
+
+      - name: Pre-build to trigger android-37.0 auto-install
+        run: |
+          ./gradlew :app:dependencies --no-daemon -Dandroid.autoInstallSdk=true || true
+          echo "Pre-build completed"
+
+      - name: Fix android-37 platform directory (after auto-install)
+        run: |
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed android-37 platform directory (copied from android-37.0)"
+          elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Pkg.Revision=1" > /opt/android-sdk/platforms/android-37/source.properties
+            echo "AndroidVersion.ApiLevel=37" >> /opt/android-sdk/platforms/android-37/source.properties
+            echo "Fixed source.properties for existing android-37"
+          else
+            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            ls -la /opt/android-sdk/platforms/
+          fi
 
       - name: Check delegate availability
         run: |
