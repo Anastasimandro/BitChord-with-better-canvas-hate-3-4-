@@ -42,15 +42,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Install Android SDK components (API 30, x86_64 system image)
+      - name: Setup Android SDK (auto-detect)
+        uses: android-actions/setup-android@v3
+
+      - name: Install API 30 and x86_64 system image
         run: |
-          # Use pre-installed Android SDK
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           $ANDROID_HOME/emulator/emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
           adb shell input keyevent 82
@@ -93,14 +95,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Install Android SDK components (API 30, x86_64 system image)
+      - name: Setup Android SDK (auto-detect)
+        uses: android-actions/setup-android@v3
+
+      - name: Install API 30 and x86_64 system image
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           $ANDROID_HOME/emulator/emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
           adb shell input keyevent 82
@@ -143,14 +148,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Install Android SDK components (API 30, x86_64 system image)
+      - name: Setup Android SDK (auto-detect)
+        uses: android-actions/setup-android@v3
+
+      - name: Install API 30 and x86_64 system image
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools"
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
-          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           $ANDROID_HOME/emulator/emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
           adb shell input keyevent 82
