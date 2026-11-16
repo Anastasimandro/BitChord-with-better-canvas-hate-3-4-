@@ -72,6 +72,13 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
 
+      - name: Enable KVM for x86_64 emulator
+        run: |
+          # GitHub Actions runners have KVM but the user isn't in the kvm group by default
+          sudo usermod -a -G kvm $USER
+          # Verify KVM access
+          ls -la /dev/kvm
+
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
           # Create AVD (wait for completion)
@@ -162,6 +169,13 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
 
+      - name: Enable KVM for x86_64 emulator
+        run: |
+          # GitHub Actions runners have KVM but the user isn't in the kvm group by default
+          sudo usermod -a -G kvm $USER
+          # Verify KVM access
+          ls -la /dev/kvm
+
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
           # Create AVD (wait for completion)
@@ -251,6 +265,13 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
+
+      - name: Enable KVM for x86_64 emulator
+        run: |
+          # GitHub Actions runners have KVM but the user isn't in the kvm group by default
+          sudo usermod -a -G kvm $USER
+          # Verify KVM access
+          ls -la /dev/kvm
 
       - name: Create and start emulator (x86_64 for NNAPI)
         run: |
