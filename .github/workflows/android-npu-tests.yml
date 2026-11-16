@@ -77,11 +77,19 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
+
+      - name: Create android-37 symlink (Gradle looks for android-37, not android-37.0)
+        run: |
           # The canary channel installs as android-37.0 but Gradle looks for android-37.
-          # Create symlink so Gradle can find the platform.
+          # Create symlink so Gradle can find the platform. Run ALWAYS (not cache-dependent).
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink android-37 -> android-37.0"
+          elif [ -e "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Symlink android-37 already exists"
+          else
+            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            ls -la /opt/android-sdk/platforms/
           fi
 
       - name: Enable KVM for x86_64 emulator
@@ -186,11 +194,19 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
+
+      - name: Create android-37 symlink (Gradle looks for android-37, not android-37.0)
+        run: |
           # The canary channel installs as android-37.0 but Gradle looks for android-37.
-          # Create symlink so Gradle can find the platform.
+          # Create symlink so Gradle can find the platform. Run ALWAYS (not cache-dependent).
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink android-37 -> android-37.0"
+          elif [ -e "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Symlink android-37 already exists"
+          else
+            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            ls -la /opt/android-sdk/platforms/
           fi
 
       - name: Enable KVM for x86_64 emulator
@@ -295,11 +311,19 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
+
+      - name: Create android-37 symlink (Gradle looks for android-37, not android-37.0)
+        run: |
           # The canary channel installs as android-37.0 but Gradle looks for android-37.
-          # Create symlink so Gradle can find the platform.
+          # Create symlink so Gradle can find the platform. Run ALWAYS (not cache-dependent).
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink android-37 -> android-37.0"
+          elif [ -e "/opt/android-sdk/platforms/android-37" ]; then
+            echo "Symlink android-37 already exists"
+          else
+            echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
+            ls -la /opt/android-sdk/platforms/
           fi
 
       - name: Enable KVM for x86_64 emulator
