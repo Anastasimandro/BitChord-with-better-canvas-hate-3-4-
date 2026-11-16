@@ -107,6 +107,17 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
+      - name: Pre-install: trigger Gradle platform install and create android-37 symlink
+        run: |
+          # Trigger Gradle to auto-install the compileSdk platform (android-37.0)
+          ./gradlew :app:dependencies --no-daemon || true
+          # Create symlink android-37 -> android-37.0 so Gradle finds the platform
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink: android-37 -> android-37.0"
+          fi
+          ls -la /opt/android-sdk/platforms/
+
       - name: Run NPU Parity Test
         run: |
           ./gradlew :app:connectedDevDebugAndroidTest \
@@ -210,6 +221,17 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
+      - name: Pre-install: trigger Gradle platform install and create android-37 symlink
+        run: |
+          # Trigger Gradle to auto-install the compileSdk platform (android-37.0)
+          ./gradlew :app:dependencies --no-daemon || true
+          # Create symlink android-37 -> android-37.0 so Gradle finds the platform
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink: android-37 -> android-37.0"
+          fi
+          ls -la /opt/android-sdk/platforms/
+
       - name: Run NPU Benchmark Test
         run: |
           ./gradlew :app:connectedDevDebugAndroidTest \
@@ -312,6 +334,17 @@ jobs:
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
+
+      - name: Pre-install: trigger Gradle platform install and create android-37 symlink
+        run: |
+          # Trigger Gradle to auto-install the compileSdk platform (android-37.0)
+          ./gradlew :app:dependencies --no-daemon || true
+          # Create symlink android-37 -> android-37.0 so Gradle finds the platform
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink: android-37 -> android-37.0"
+          fi
+          ls -la /opt/android-sdk/platforms/
 
       - name: Check delegate availability
         run: |
