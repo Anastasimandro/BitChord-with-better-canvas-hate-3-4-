@@ -86,8 +86,21 @@ jobs:
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
             cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
             echo "Copied android-37.0 -> android-37"
+            # Fix source.properties so Gradle recognizes this as a stable installed platform
+            # (canary channel may have preview revision that Gradle rejects, triggering auto-install)
+            cat > /opt/android-sdk/platforms/android-37/source.properties << 'EOF'
+Pkg.Revision=1
+AndroidVersion.ApiLevel=37
+EOF
+            echo "Fixed source.properties for android-37"
           elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
             echo "Directory android-37 already exists"
+            # Ensure source.properties is correct
+            cat > /opt/android-sdk/platforms/android-37/source.properties << 'EOF'
+Pkg.Revision=1
+AndroidVersion.ApiLevel=37
+EOF
+            echo "Fixed source.properties for android-37"
           else
             echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
             ls -la /opt/android-sdk/platforms/
@@ -205,8 +218,21 @@ jobs:
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
             cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
             echo "Copied android-37.0 -> android-37"
+            # Fix source.properties so Gradle recognizes this as a stable installed platform
+            # (canary channel may have preview revision that Gradle rejects, triggering auto-install)
+            cat > /opt/android-sdk/platforms/android-37/source.properties << 'EOF'
+Pkg.Revision=1
+AndroidVersion.ApiLevel=37
+EOF
+            echo "Fixed source.properties for android-37"
           elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
             echo "Directory android-37 already exists"
+            # Ensure source.properties is correct
+            cat > /opt/android-sdk/platforms/android-37/source.properties << 'EOF'
+Pkg.Revision=1
+AndroidVersion.ApiLevel=37
+EOF
+            echo "Fixed source.properties for android-37"
           else
             echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
             ls -la /opt/android-sdk/platforms/
@@ -324,8 +350,21 @@ jobs:
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -d "/opt/android-sdk/platforms/android-37" ]; then
             cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
             echo "Copied android-37.0 -> android-37"
+            # Fix source.properties so Gradle recognizes this as a stable installed platform
+            # (canary channel may have preview revision that Gradle rejects, triggering auto-install)
+            cat > /opt/android-sdk/platforms/android-37/source.properties << 'EOF'
+Pkg.Revision=1
+AndroidVersion.ApiLevel=37
+EOF
+            echo "Fixed source.properties for android-37"
           elif [ -d "/opt/android-sdk/platforms/android-37" ]; then
             echo "Directory android-37 already exists"
+            # Ensure source.properties is correct
+            cat > /opt/android-sdk/platforms/android-37/source.properties << 'EOF'
+Pkg.Revision=1
+AndroidVersion.ApiLevel=37
+EOF
+            echo "Fixed source.properties for android-37"
           else
             echo "WARNING: android-37.0 not found in /opt/android-sdk/platforms/"
             ls -la /opt/android-sdk/platforms/
