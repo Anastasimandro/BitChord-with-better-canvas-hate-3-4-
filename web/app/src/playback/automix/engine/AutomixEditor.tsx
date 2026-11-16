@@ -1,3 +1,9 @@
+// BitChord, Automix 2.0 Phase 4 Task B2: Per-Pair Editor UI (web-first).
+// Android parity: web-first implementation. Android follow-up would port this editor
+// to the automixDetail flow in the Android app, reusing the shared override schema
+// (TrackAnalysis.manualOverrides in shared/types) and the applyOverrides logic.
+// The editor uses only web APIs (Canvas, IndexedDB via analyzer) and React.
+// Shared logic candidates: manualOverrides schema, PRESET_OVERRIDES, applyOverrides.
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePlayer } from '@/state/player';
 import { analyzer } from '@/playback/automix/analysis/analyzer';
