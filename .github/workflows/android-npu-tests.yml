@@ -103,10 +103,7 @@ jobs:
           test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Parity Test
-        run: |
-          ./gradlew :app:connectedDevDebugAndroidTest \
-            -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest \
-            --no-daemon
+        run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
 
       - name: Upload test results
         if: always()
@@ -184,7 +181,7 @@ jobs:
           AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
           if [ -f "$AVD_CONFIG" ]; then
             sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
-            echo "_updated AVD config:"
+            echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
           nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
@@ -200,10 +197,7 @@ jobs:
           test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Benchmark Test
-        run: |
-          ./gradlew :app:connectedDevDebugAndroidTest \
-            -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest \
-            --no-daemon
+        run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
 
       - name: Upload benchmark results
         if: always()
@@ -297,11 +291,7 @@ jobs:
           test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Check delegate availability
-        run: |
-          ./gradlew :app:connectedDevDebugAndroidTest \
-            -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity \
-            --no-daemon
+        run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
 
       - name: Print delegate availability
-        run: |
-          find app/build/outputs/androidTest-results -name "*.xml" -exec grep -l "Delegate availability" {} \;
+        run: find app/build/outputs/androidTest-results -name "*.xml" -exec grep -l "Delegate availability" {} \;
