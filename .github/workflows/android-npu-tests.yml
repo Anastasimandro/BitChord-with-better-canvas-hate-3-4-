@@ -77,6 +77,9 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
+          # Set ANDROID_AVD_HOME to where avdmanager creates AVDs (/home/runner/.config/.android/avd)
+          # Emulator searches in $ANDROID_AVD_HOME, $ANDROID_SDK_HOME/avd, $HOME/.android/avd
+          export ANDROID_AVD_HOME=/home/runner/.config/.android/avd
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -156,6 +159,9 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
+          # Set ANDROID_AVD_HOME to where avdmanager creates AVDs (/home/runner/.config/.android/avd)
+          # Emulator searches in $ANDROID_AVD_HOME, $ANDROID_SDK_HOME/avd, $HOME/.android/avd
+          export ANDROID_AVD_HOME=/home/runner/.config/.android/avd
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -235,6 +241,9 @@ jobs:
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
           # Verify AVD was created
           avdmanager list avd
+          # Set ANDROID_AVD_HOME to where avdmanager creates AVDs (/home/runner/.config/.android/avd)
+          # Emulator searches in $ANDROID_AVD_HOME, $ANDROID_SDK_HOME/avd, $HOME/.android/avd
+          export ANDROID_AVD_HOME=/home/runner/.config/.android/avd
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
