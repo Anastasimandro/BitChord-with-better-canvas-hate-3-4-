@@ -95,6 +95,27 @@ jobs:
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
+          # Start emulator in background with kvm group (required for x86_64 hardware acceleration)
+          # Use 'sg kvm' to run with the kvm group membership from usermod
+          sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
+          # Wait for boot with longer timeout (emulator can be slow on CI)
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb shell input keyevent 82
+        run: |
+          # Create AVD (wait for completion)
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          # Verify AVD was created
+          avdmanager list avd
+          # Fix AVD config: the AVD stores the system image path at creation time.
+          # On GitHub Actions, avdmanager may resolve the system image to a relative path
+          # or the default SDK location. Set the absolute path to our custom SDK.
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            # Replace any relative or default SDK path with our custom SDK absolute path
+            sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -192,6 +213,27 @@ jobs:
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
+          # Start emulator in background with kvm group (required for x86_64 hardware acceleration)
+          # Use 'sg kvm' to run with the kvm group membership from usermod
+          sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
+          # Wait for boot with longer timeout (emulator can be slow on CI)
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb shell input keyevent 82
+        run: |
+          # Create AVD (wait for completion)
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          # Verify AVD was created
+          avdmanager list avd
+          # Fix AVD config: the AVD stores the system image path at creation time.
+          # On GitHub Actions, avdmanager may resolve the system image to a relative path
+          # or the default SDK location. Set the absolute path to our custom SDK.
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            # Replace any relative or default SDK path with our custom SDK absolute path
+            sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
           # Start emulator in background
           emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &
           # Wait for boot with longer timeout (emulator can be slow on CI)
@@ -274,6 +316,27 @@ jobs:
           ls -la /dev/kvm
 
       - name: Create and start emulator (x86_64 for NNAPI)
+        run: |
+          # Create AVD (wait for completion)
+          echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
+          # Verify AVD was created
+          avdmanager list avd
+          # Fix AVD config: the AVD stores the system image path at creation time.
+          # On GitHub Actions, avdmanager may resolve the system image to a relative path
+          # or the default SDK location. Set the absolute path to our custom SDK.
+          AVD_CONFIG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          if [ -f "$AVD_CONFIG" ]; then
+            # Replace any relative or default SDK path with our custom SDK absolute path
+            sed -i 's|^image.sysdir.1=.*|image.sysdir.1=/opt/android-sdk/system-images/android-30/default/x86_64/|' "$AVD_CONFIG"
+            echo "Updated AVD config:"
+            cat "$AVD_CONFIG"
+          fi
+          # Start emulator in background with kvm group (required for x86_64 hardware acceleration)
+          # Use 'sg kvm' to run with the kvm group membership from usermod
+          sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
+          # Wait for boot with longer timeout (emulator can be slow on CI)
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb shell input keyevent 82
         run: |
           # Create AVD (wait for completion)
           echo "no" | avdmanager create avd -n test -k "system-images;android-30;default;x86_64" --force
