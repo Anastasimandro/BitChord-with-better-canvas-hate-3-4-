@@ -73,7 +73,11 @@ jobs:
 
       - name: Create android-37 symlink (Gradle installs as android-37.0)
         run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -e /opt/android-sdk/platforms/android-37 ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink: android-37 -> android-37.0"
+          fi
+          ls -la /opt/android-sdk/platforms/
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -95,11 +99,17 @@ jobs:
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
-        run: ./gradlew :app:dependencies --no-daemon || true
-
-      - name: Create android-37 symlink (Gradle installs as android-37.0)
         run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+          ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Verify android-37 target exists before tests
+        run: |
+          if [ ! -d /opt/android-sdk/platforms/android-37 ] && [ ! -L /opt/android-sdk/platforms/android-37 ]; then
+            echo "ERROR: android-37 target not found!"
+            ls -la /opt/android-sdk/platforms/
+            exit 1
+          fi
+          echo "android-37 target confirmed"
 
       - name: Run NPU Parity Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
@@ -166,7 +176,11 @@ jobs:
 
       - name: Create android-37 symlink (Gradle installs as android-37.0)
         run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -e /opt/android-sdk/platforms/android-37 ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink: android-37 -> android-37.0"
+          fi
+          ls -la /opt/android-sdk/platforms/
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -188,11 +202,17 @@ jobs:
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
-        run: ./gradlew :app:dependencies --no-daemon || true
-
-      - name: Create android-37 symlink (Gradle installs as android-37.0)
         run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+          ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Verify android-37 target exists before tests
+        run: |
+          if [ ! -d /opt/android-sdk/platforms/android-37 ] && [ ! -L /opt/android-sdk/platforms/android-37 ]; then
+            echo "ERROR: android-37 target not found!"
+            ls -la /opt/android-sdk/platforms/
+            exit 1
+          fi
+          echo "android-37 target confirmed"
 
       - name: Run NPU Benchmark Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
@@ -259,7 +279,11 @@ jobs:
 
       - name: Create android-37 symlink (Gradle installs as android-37.0)
         run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -e /opt/android-sdk/platforms/android-37 ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink: android-37 -> android-37.0"
+          fi
+          ls -la /opt/android-sdk/platforms/
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -281,11 +305,17 @@ jobs:
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
-        run: ./gradlew :app:dependencies --no-daemon || true
-
-      - name: Create android-37 symlink (Gradle installs as android-37.0)
         run: |
-          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+          ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Verify android-37 target exists before tests
+        run: |
+          if [ ! -d /opt/android-sdk/platforms/android-37 ] && [ ! -L /opt/android-sdk/platforms/android-37 ]; then
+            echo "ERROR: android-37 target not found!"
+            ls -la /opt/android-sdk/platforms/
+            exit 1
+          fi
+          echo "android-37 target confirmed"
 
       - name: Check delegate availability
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
