@@ -72,8 +72,10 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null
           # Install components needed for the build: compileSdk=34 (Android 14), NDK, Build-Tools 35
-          # Note: compileSdk=37 in build.gradle.kts refers to a preview version; android-34 is the latest stable
+          # Note: compileSdk=37 in build.gradle.kts requires preview platform; install from canary channel
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          # Install preview platform android-37 from canary channel for compileSdk=37
+          sdkmanager --channel=3 "platforms;android-37" || true
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -173,8 +175,10 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null
           # Install components needed for the build: compileSdk=34 (Android 14), NDK, Build-Tools 35
-          # Note: compileSdk=37 in build.gradle.kts refers to a preview version; android-34 is the latest stable
+          # Note: compileSdk=37 in build.gradle.kts requires preview platform; install from canary channel
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          # Install preview platform android-37 from canary channel for compileSdk=37
+          sdkmanager --channel=3 "platforms;android-37" || true
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -274,8 +278,10 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null
           # Install components needed for the build: compileSdk=34 (Android 14), NDK, Build-Tools 35
-          # Note: compileSdk=37 in build.gradle.kts refers to a preview version; android-34 is the latest stable
+          # Note: compileSdk=37 in build.gradle.kts requires preview platform; install from canary channel
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          # Install preview platform android-37 from canary channel for compileSdk=37
+          sdkmanager --channel=3 "platforms;android-37" || true
 
       - name: Enable KVM for x86_64 emulator
         run: |
