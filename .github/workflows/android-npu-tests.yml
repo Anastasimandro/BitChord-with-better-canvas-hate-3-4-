@@ -90,8 +90,8 @@ jobs:
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
-          sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
@@ -187,8 +187,8 @@ jobs:
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
-          sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
@@ -284,8 +284,8 @@ jobs:
             echo "Updated AVD config:"
             cat "$AVD_CONFIG"
           fi
-          sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          nohup sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max' > /tmp/emulator.log 2>&1 &
+          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
       - name: Pre-install: trigger Gradle platform install
