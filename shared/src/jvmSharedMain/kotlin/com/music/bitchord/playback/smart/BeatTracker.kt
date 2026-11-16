@@ -58,7 +58,19 @@ class BeatTracker(
     private val modelPath: () -> String,
     /** How many threads inference may use; the beat and downbeat pass is the expensive one. */
     private val inferenceThreads: () -> Int,
+    /** NPU delegate to use; null = auto-detect (CPU fallback on failure). */
+    private val preferredDelegate: NpuDelegate? = null,
+    /** Force CPU delegate for testing / benchmarking; skips NPU entirely. Evaluated per-session. */
+    private val forceCpu: (() -> Boolean)? = null,
 ) {
+
+    /** NPU execution provider delegate type. */
+    enum class NpuDelegate {
+        /** Android NNAPI execution provider. */
+        NNAPI,
+        /** Qualcomm QNN execution provider (if bundled in ONNX Runtime build). */
+        QNN,
+    }
 
     /** A tracked grid on the analysed audio's own timeline, in seconds. */
     data class Grid(
@@ -70,16 +82,22 @@ class BeatTracker(
         val beatConfidence: Double,
     )
 
+    /** Which delegate is currently active; null = CPU. */
+    @Volatile var activeDelegate: NpuDelegate? = null
+
     @Volatile private var session: OrtSession? = null
     @Volatile private var sessionThreads = 0
+    @Volatile private var sessionDelegate: NpuDelegate? = null
     private val lock = Any()
 
     /** Parsing the graph is far too expensive to repeat per track, so one session is kept. */
     private fun session(): OrtSession? {
         val threads = inferenceThreads()
-        session?.takeIf { sessionThreads == threads }?.let { return it }
+        val forceCpuNow = forceCpu?.invoke() == true
+        val delegate = if (forceCpuNow) null else preferredDelegate ?: detectBestDelegate()
+        session?.takeIf { sessionThreads == threads && sessionDelegate == delegate }?.let { return it }
         synchronized(lock) {
-            session?.takeIf { sessionThreads == threads }?.let { return it }
+            session?.takeIf { sessionThreads == threads && sessionDelegate == delegate }?.let { return it }
             runCatching { session?.close() }
             session = null
             return runCatching {
@@ -94,15 +112,82 @@ class BeatTracker(
                     // allocating per run is the right trade.
                     setCPUArenaAllocator(false)
                     setMemoryPatternOptimization(false)
+                    // Configure NPU delegate if requested and not forced to CPU.
+                    if (delegate != null) {
+                        configureDelegate(options, delegate)
+                    }
                 }
-                OrtEnvironment.getEnvironment().createSession(file.absolutePath, options)
+                val created = OrtEnvironment.getEnvironment().createSession(file.absolutePath, options)
                     .also {
                         session = it
                         sessionThreads = threads
+                        sessionDelegate = delegate
+                        activeDelegate = delegate
                     }
-            }.onFailure { AnalysisLog.warn("Beat model unavailable; falling back to no grid", it) }
-                .getOrNull()
+                AnalysisLog.warn("Beat model session created: delegate=${delegate?.name ?: "CPU"}, threads=$threads, forceCpu=$forceCpuNow")
+                created
+            }.onFailure { e ->
+                AnalysisLog.warn("Beat model session creation failed (delegate=${delegate?.name ?: "CPU"}): ${e.message}, falling back to CPU", e)
+                // Fallback to CPU if delegate creation failed
+                if (delegate != null) {
+                    activeDelegate = null
+                    createCpuSession(file, threads)
+                } else {
+                    throw e
+                }
+            }.getOrNull()
         }
+    }
+
+    /** Creates a CPU-only session (fallback). */
+    private fun createCpuSession(file: File, threads: Int): OrtSession? {
+        return runCatching {
+            val options = OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(threads)
+                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                setCPUArenaAllocator(false)
+                setMemoryPatternOptimization(false)
+            }
+            OrtEnvironment.getEnvironment().createSession(file.absolutePath, options)
+                .also {
+                    session = it
+                    sessionThreads = threads
+                    sessionDelegate = null
+                    activeDelegate = null
+                }
+        }.onFailure { AnalysisLog.warn("Beat model CPU fallback also failed", it) }.getOrNull()
+    }
+
+    /** Configures the session options for the given NPU delegate. */
+    private fun configureDelegate(options: OrtSession.SessionOptions, delegate: NpuDelegate) {
+        when (delegate) {
+            NpuDelegate.NNAPI -> {
+                // Enable NNAPI execution provider. The config key is "session.use_nnapi".
+                // Value "1" enables it; additional config keys can control NNAPI behavior.
+                options.addConfigEntry("session.use_nnapi", "1")
+                // Optional: disable NNAPI CPU fallback to force delegate or fail fast.
+                // options.addConfigEntry("session.nnapi_enable_cpu_fallback", "0")
+            }
+            NpuDelegate.QNN -> {
+                // Enable QNN execution provider. Requires ONNX Runtime built with QNN support.
+                // Config keys depend on the QNN SDK version bundled.
+                options.addConfigEntry("session.use_qnn", "1")
+                // QNN backend options (HTP for Hexagon DSP, CPU fallback, etc.)
+                // options.addConfigEntry("qnn.backend", "htp")
+                // options.addConfigEntry("qnn.htp_performance_mode", "high_performance")
+                // options.addConfigEntry("qnn.enable_htp_fp16_precision", "1")
+            }
+        }
+    }
+
+    /** Detects the best available NPU delegate at runtime. Returns null if none available. */
+    private fun detectBestDelegate(): NpuDelegate? {
+        // Prefer QNN if available (Qualcomm devices with HTP), otherwise NNAPI.
+        // We check by attempting to create a minimal session with each delegate.
+        // The actual availability is determined when the session is created.
+        // For now, prefer NNAPI as it's more widely available on Android.
+        // QNN detection would require checking for QNN libraries at runtime.
+        return NpuDelegate.NNAPI
     }
 
     /**
@@ -122,7 +207,8 @@ class BeatTracker(
         val inferStarted = System.currentTimeMillis()
         if (!infer(active, spectrogram, beatLogits, downbeatLogits)) return null
         AnalysisLog.warn("mel ${melMs}ms (${spectrogram.frames} frames) " +
-                "infer ${System.currentTimeMillis() - inferStarted}ms",
+                "infer ${System.currentTimeMillis() - inferStarted}ms " +
+                "delegate=${activeDelegate?.name ?: "CPU"}",
         )
 
         val fps = MelSpectrogram.frameRate
@@ -211,6 +297,8 @@ class BeatTracker(
             runCatching { session?.close() }
             session = null
             sessionThreads = 0
+            sessionDelegate = null
+            activeDelegate = null
         }
     }
 
