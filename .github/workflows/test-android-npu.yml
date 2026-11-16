@@ -46,6 +46,8 @@ jobs:
           unzip -q cmdline-tools.zip
           mv cmdline-tools latest
           rm cmdline-tools.zip
+      - name: Set Android SDK PATH
+        run: |
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
@@ -108,6 +110,8 @@ jobs:
           unzip -q cmdline-tools.zip
           mv cmdline-tools latest
           rm cmdline-tools.zip
+      - name: Set Android SDK PATH
+        run: |
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
@@ -170,6 +174,8 @@ jobs:
           unzip -q cmdline-tools.zip
           mv cmdline-tools latest
           rm cmdline-tools.zip
+      - name: Set Android SDK PATH
+        run: |
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/emulator" >> $GITHUB_PATH
