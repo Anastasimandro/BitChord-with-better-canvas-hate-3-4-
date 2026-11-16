@@ -94,9 +94,11 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
-      - name: Pre-install: trigger Gradle platform install and create android-37 symlink
+      - name: Pre-install: trigger Gradle platform install
+        run: ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Create android-37 symlink
         run: |
-          ./gradlew :app:dependencies --no-daemon || true
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink: android-37 -> android-37.0"
@@ -192,9 +194,11 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
-      - name: Pre-install: trigger Gradle platform install and create android-37 symlink
+      - name: Pre-install: trigger Gradle platform install
+        run: ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Create android-37 symlink
         run: |
-          ./gradlew :app:dependencies --no-daemon || true
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink: android-37 -> android-37.0"
@@ -290,9 +294,11 @@ jobs:
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
 
-      - name: Pre-install: trigger Gradle platform install and create android-37 symlink
+      - name: Pre-install: trigger Gradle platform install
+        run: ./gradlew :app:dependencies --no-daemon || true
+
+      - name: Create android-37 symlink
         run: |
-          ./gradlew :app:dependencies --no-daemon || true
           if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
             ln -s android-37.0 /opt/android-sdk/platforms/android-37
             echo "Created symlink: android-37 -> android-37.0"
