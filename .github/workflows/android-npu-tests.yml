@@ -71,6 +71,10 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager --channel=3 "platforms;android-37" || true
 
+      - name: Create android-37 symlink (Gradle installs as android-37.0)
+        run: |
+          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+
       - name: Enable KVM for x86_64 emulator
         run: |
           sudo usermod -a -G kvm $USER
@@ -153,6 +157,10 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager --channel=3 "platforms;android-37" || true
 
+      - name: Create android-37 symlink (Gradle installs as android-37.0)
+        run: |
+          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
+
       - name: Enable KVM for x86_64 emulator
         run: |
           sudo usermod -a -G kvm $USER
@@ -234,6 +242,10 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager --channel=3 "platforms;android-37" || true
+
+      - name: Create android-37 symlink (Gradle installs as android-37.0)
+        run: |
+          test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Enable KVM for x86_64 emulator
         run: |
