@@ -173,21 +173,38 @@ class BeatTracker(
                 // Config keys depend on the QNN SDK version bundled.
                 options.addConfigEntry("session.use_qnn", "1")
                 // QNN backend options (HTP for Hexagon DSP, CPU fallback, etc.)
-                // options.addConfigEntry("qnn.backend", "htp")
-                // options.addConfigEntry("qnn.htp_performance_mode", "high_performance")
-                // options.addConfigEntry("qnn.enable_htp_fp16_precision", "1")
+                // The standard onnxruntime-android artifact may not include QNN; if not
+                // available, session creation will fail and we'll fall back to NNAPI/CPU.
+                options.addConfigEntry("qnn.backend", "htp")
+                options.addConfigEntry("qnn.htp_performance_mode", "high_performance")
+                options.addConfigEntry("qnn.enable_htp_fp16_precision", "1")
+                // Enable QNN context caching for faster subsequent session creation
+                options.addConfigEntry("qnn.enable_context_caching", "1")
             }
         }
     }
 
     /** Detects the best available NPU delegate at runtime. Returns null if none available. */
     private fun detectBestDelegate(): NpuDelegate? {
-        // Prefer QNN if available (Qualcomm devices with HTP), otherwise NNAPI.
-        // We check by attempting to create a minimal session with each delegate.
-        // The actual availability is determined when the session is created.
-        // For now, prefer NNAPI as it's more widely available on Android.
-        // QNN detection would require checking for QNN libraries at runtime.
-        return NpuDelegate.NNAPI
+        // Check delegates in priority order: QNN (Qualcomm HTP) first, then NNAPI.
+        // We check availability by attempting to create a minimal session.
+        val threads = inferenceThreads()
+        val file = File(modelPath())
+
+        // Check QNN first (higher performance on Qualcomm devices with HTP)
+        if (checkDelegateAvailability(NpuDelegate.QNN, threads)) {
+            AnalysisLog.warn("NPU delegate detection: QNN available")
+            return NpuDelegate.QNN
+        }
+
+        // Fall back to NNAPI (widely available on Android)
+        if (checkDelegateAvailability(NpuDelegate.NNAPI, threads)) {
+            AnalysisLog.warn("NPU delegate detection: NNAPI available")
+            return NpuDelegate.NNAPI
+        }
+
+        AnalysisLog.warn("NPU delegate detection: no NPU delegate available, using CPU")
+        return null
     }
 
     /**

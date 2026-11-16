@@ -73,9 +73,9 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
             unpackedAsset(BeatTracker.MODEL_ASSET)
         },
         inferenceThreads = { AppSettings.automixPerformanceMode.value.inferenceThreads },
-        // Prefer NNAPI delegate on Android; BeatTracker will fall back to CPU
-        // if delegate creation fails or if forceCpu is true.
-        preferredDelegate = BeatTracker.NpuDelegate.NNAPI,
+        // Auto-detect best NPU delegate (QNN > NNAPI > CPU) at runtime.
+        // BeatTracker checks delegate availability and falls back cleanly.
+        preferredDelegate = null,
         // Force CPU when thermally throttled (SEVERE or higher) to avoid
         // adding load to an already overheating device, or when the user
         // has explicitly disabled NPU inference for testing. The delegate
