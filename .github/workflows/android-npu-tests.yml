@@ -71,7 +71,8 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
+          # Install components needed for the build: compileSdk=37, NDK, Build-Tools 35
+          sdkmanager "platforms;android-37" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -170,7 +171,8 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
+          # Install components needed for the build: compileSdk=37, NDK, Build-Tools 35
+          sdkmanager "platforms;android-37" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -269,7 +271,8 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;34.0.0"
+          # Install components needed for the build: compileSdk=37, NDK, Build-Tools 35
+          sdkmanager "platforms;android-37" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Enable KVM for x86_64 emulator
         run: |
