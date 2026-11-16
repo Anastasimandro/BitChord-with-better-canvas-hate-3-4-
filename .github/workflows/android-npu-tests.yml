@@ -77,6 +77,12 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
+          # The canary channel installs as android-37.0 but Gradle looks for android-37.
+          # Create symlink so Gradle can find the platform.
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink android-37 -> android-37.0"
+          fi
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -107,17 +113,6 @@ jobs:
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
-
-      - name: Pre-install android-37 platform (trigger Gradle to download it)
-        run: |
-          # Run a minimal Gradle task to trigger the automatic platform installation
-          # This will install android-37.0 in /opt/android-sdk/platforms/
-          ./gradlew :app:dependencies --no-daemon -q || true
-          # Create symlink android-37 -> android-37.0 so Gradle can find it
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink android-37 -> android-37.0"
-          fi
 
       - name: Run NPU Parity Test
         run: |
@@ -191,6 +186,12 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
+          # The canary channel installs as android-37.0 but Gradle looks for android-37.
+          # Create symlink so Gradle can find the platform.
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink android-37 -> android-37.0"
+          fi
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -221,17 +222,6 @@ jobs:
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
-
-      - name: Pre-install android-37 platform (trigger Gradle to download it)
-        run: |
-          # Run a minimal Gradle task to trigger the automatic platform installation
-          # This will install android-37.0 in /opt/android-sdk/platforms/
-          ./gradlew :app:dependencies --no-daemon -q || true
-          # Create symlink android-37 -> android-37.0 so Gradle can find it
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink android-37 -> android-37.0"
-          fi
 
       - name: Run NPU Benchmark Test
         run: |
@@ -305,6 +295,12 @@ jobs:
           sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           # Install preview platform android-37 from canary channel for compileSdk=37
           sdkmanager --channel=3 "platforms;android-37" || true
+          # The canary channel installs as android-37.0 but Gradle looks for android-37.
+          # Create symlink so Gradle can find the platform.
+          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
+            ln -s android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Created symlink android-37 -> android-37.0"
+          fi
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -335,17 +331,6 @@ jobs:
           # Wait for boot with longer timeout (emulator can be slow on CI)
           timeout 300 bash -c 'adb wait-for-device shell "while [[ -z \$(getprop sys.boot_completed) ]]; do sleep 1; done"'
           adb shell input keyevent 82
-
-      - name: Pre-install android-37 platform (trigger Gradle to download it)
-        run: |
-          # Run a minimal Gradle task to trigger the automatic platform installation
-          # This will install android-37.0 in /opt/android-sdk/platforms/
-          ./gradlew :app:dependencies --no-daemon -q || true
-          # Create symlink android-37 -> android-37.0 so Gradle can find it
-          if [ -d "/opt/android-sdk/platforms/android-37.0" ] && [ ! -e "/opt/android-sdk/platforms/android-37" ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink android-37 -> android-37.0"
-          fi
 
       - name: Check delegate availability
         run: |
