@@ -728,7 +728,7 @@ listOf(
     "checkDevBenchmarkAarMetadata",
     "checkProdBenchmarkAarMetadata",
 ).forEach { taskName ->
-    project.tasks.findByName(taskName)?.let { it.isEnabled = false }
+    project.tasks.findByName(taskName)?.setEnabled(false)
 }
 
 tasks.named("check") { dependsOn(i18nParityTest) }
