@@ -75,7 +75,8 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb wait-for-device
+          adb shell "while [ -z \$(getprop sys.boot_completed) ]; do sleep 1; done"
           adb shell input keyevent 82
       - name: Run Parity Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
@@ -130,7 +131,8 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb wait-for-device
+          adb shell "while [ -z \$(getprop sys.boot_completed) ]; do sleep 1; done"
           adb shell input keyevent 82
       - name: Run Benchmark Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
@@ -185,7 +187,8 @@ jobs:
             cat "$AVD_CONFIG"
           fi
           sg kvm -c 'emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -qemu -cpu max &' &
-          timeout 300 bash -c 'adb wait-for-device shell "while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done"'
+          adb wait-for-device
+          adb shell "while [ -z \$(getprop sys.boot_completed) ]; do sleep 1; done"
           adb shell input keyevent 82
       - name: Check delegate availability
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
