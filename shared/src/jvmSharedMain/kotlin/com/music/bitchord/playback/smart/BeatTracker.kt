@@ -116,7 +116,7 @@ class BeatTracker(
                     setMemoryPatternOptimization(false)
                     // Configure NPU delegate if requested and not forced to CPU.
                     if (delegate != null) {
-                        configureDelegate(options, delegate)
+                        configureDelegate(this, delegate)
                     }
                 }
                 val created = OrtEnvironment.getEnvironment().createSession(file!!.absolutePath, options!!)
@@ -221,7 +221,7 @@ class BeatTracker(
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 setCPUArenaAllocator(false)
                 setMemoryPatternOptimization(false)
-                configureDelegate(options, delegate)
+                configureDelegate(this, delegate)
             }
             OrtEnvironment.getEnvironment().createSession(file.absolutePath, options).close()
         }.isSuccess
