@@ -15,21 +15,26 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
+import kotlin.math.min
 
 @RunWith(AndroidJUnit4::class)
 class BeatTrackerNpuParityTest {
 
-    /** Tolerance for BPM difference (absolute). */
-    private const val BPM_TOLERANCE = 0.5
+    companion object {
+        /** Tolerance for BPM difference (absolute). */
+        private const val BPM_TOLERANCE = 0.5
 
-    /** Tolerance for beat confidence difference (absolute). */
-    private const val CONFIDENCE_TOLERANCE = 0.05
+        /** Tolerance for beat confidence difference (absolute). */
+        private const val CONFIDENCE_TOLERANCE = 0.05
 
-    /** Tolerance for beat time difference (seconds). */
-    private const val BEAT_TIME_TOLERANCE = 0.05
+        /** Tolerance for beat time difference (seconds). */
+        private const val BEAT_TIME_TOLERANCE = 0.05
+    }
 
     @Test
     fun npuDelegateParity() {

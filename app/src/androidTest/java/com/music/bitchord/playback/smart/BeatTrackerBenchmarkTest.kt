@@ -20,11 +20,13 @@ import kotlin.math.min
 @RunWith(AndroidJUnit4::class)
 class BeatTrackerBenchmarkTest {
 
-    /** Number of warmup runs (discarded). */
-    private const val WARMUP_RUNS = 1
+    companion object {
+        /** Number of warmup runs (discarded). */
+        private const val WARMUP_RUNS = 1
 
-    /** Number of measured runs. */
-    private const val MEASURED_RUNS = 5
+        /** Number of measured runs. */
+        private const val MEASURED_RUNS = 5
+    }
 
     @Test
     fun coldL0Benchmark() {
