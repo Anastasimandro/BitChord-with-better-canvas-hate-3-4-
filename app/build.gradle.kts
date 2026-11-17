@@ -75,20 +75,7 @@ android {
     // InnerTubeX's AAR requires compiling against 37; targetSdk (runtime behaviour) stays 36.
     compileSdk = 36
 
-    // InnerTubeX's AAR metadata declares compileSdk >= 37, but android-37 is not
-    // available in CI SDK channels. targetSdk stays 36 so runtime behaviour is
-    // unaffected; the AAR metadata check is disabled because the dependency
-    // works fine at API 36 runtime level.
-    listOf(
-        "checkDevDebugAarMetadata",
-        "checkProdDebugAarMetadata",
-        "checkDevReleaseAarMetadata",
-        "checkProdReleaseAarMetadata",
-        "checkDevBenchmarkAarMetadata",
-        "checkProdBenchmarkAarMetadata",
-    ).forEach { taskName ->
-        tasks.findByName(taskName)?.let { it.isEnabled = false }
-    }
+
 
     defaultConfig {
         applicationId = "com.music.bitchord"
@@ -729,4 +716,19 @@ tasks.register("localeCoverage") {
 // `check` already runs every variant's unit tests, parity tests included;
 // depending on the dedicated task makes that promise explicit and keeps the
 // two entry points from drifting apart.
+// InnerTubeX's AAR metadata declares compileSdk >= 37, but android-37 is not
+// available in CI SDK channels. targetSdk stays 36 so runtime behaviour is
+// unaffected; the AAR metadata check is disabled because the dependency
+// works fine at API 36 runtime level.
+listOf(
+    "checkDevDebugAarMetadata",
+    "checkProdDebugAarMetadata",
+    "checkDevReleaseAarMetadata",
+    "checkProdReleaseAarMetadata",
+    "checkDevBenchmarkAarMetadata",
+    "checkProdBenchmarkAarMetadata",
+).forEach { taskName ->
+    project.tasks.findByName(taskName)?.let { it.isEnabled = false }
+}
+
 tasks.named("check") { dependsOn(i18nParityTest) }
