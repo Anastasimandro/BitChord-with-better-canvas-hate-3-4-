@@ -79,10 +79,15 @@ android {
     // available in CI SDK channels. targetSdk stays 36 so runtime behaviour is
     // unaffected; the AAR metadata check is disabled because the dependency
     // works fine at API 36 runtime level.
-    tasks.all {
-        if (name.endsWith("AarMetadata")) {
-            isEnabled = false
-        }
+    listOf(
+        "checkDevDebugAarMetadata",
+        "checkProdDebugAarMetadata",
+        "checkDevReleaseAarMetadata",
+        "checkProdReleaseAarMetadata",
+        "checkDevBenchmarkAarMetadata",
+        "checkProdBenchmarkAarMetadata",
+    ).forEach { taskName ->
+        tasks.findByName(taskName)?.isEnabled = false
     }
 
     defaultConfig {
