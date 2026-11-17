@@ -72,8 +72,7 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          sdkmanager --channel=3 "platforms;android-37" || true
+          sdkmanager "platforms;android-34" "platforms;android-36" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -97,8 +96,6 @@ jobs:
       - name: Pre-install: trigger Gradle platform install
         run: ./gradlew :app:dependencies --no-daemon || true
 
-      - name: Create android-37 symlink
-        run: test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Parity Test
         run: |
@@ -167,8 +164,7 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          sdkmanager --channel=3 "platforms;android-37" || true
+          sdkmanager "platforms;android-34" "platforms;android-36" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -192,8 +188,6 @@ jobs:
       - name: Pre-install: trigger Gradle platform install
         run: ./gradlew :app:dependencies --no-daemon || true
 
-      - name: Create android-37 symlink
-        run: test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Run NPU Benchmark Test
         run: |
@@ -262,8 +256,7 @@ jobs:
       - name: Install Android SDK components (API 30, x86_64 system image)
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          sdkmanager --channel=3 "platforms;android-37" || true
+          sdkmanager "platforms;android-34" "platforms;android-36" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Enable KVM for x86_64 emulator
         run: |
@@ -287,8 +280,6 @@ jobs:
       - name: Pre-install: trigger Gradle platform install
         run: ./gradlew :app:dependencies --no-daemon || true
 
-      - name: Create android-37 symlink
-        run: test -d /opt/android-sdk/platforms/android-37.0 && test ! -e /opt/android-sdk/platforms/android-37 && ln -s android-37.0 /opt/android-sdk/platforms/android-37 && echo "Created symlink: android-37 -> android-37.0"; ls -la /opt/android-sdk/platforms/
 
       - name: Check delegate availability
         run: |

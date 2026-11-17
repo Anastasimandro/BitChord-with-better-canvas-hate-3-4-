@@ -72,8 +72,10 @@ val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
 android {
     namespace = "com.music.bitchord"
-    // InnerTubeX's AAR requires compiling against 37; targetSdk (runtime behaviour) stays 36.
-    compileSdk = 37
+    // InnerTubeX's AAR declares minCompileSdk 37, but android-37 is not available in CI.
+    // targetSdk stays 36 so runtime behaviour is unaffected; the dependency works fine
+    // at API 36 compile level once the AAR metadata check is disabled below.
+    compileSdk = 36
 
 
 

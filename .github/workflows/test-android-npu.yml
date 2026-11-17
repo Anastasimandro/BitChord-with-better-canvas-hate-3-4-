@@ -54,8 +54,7 @@ jobs:
       - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          sdkmanager --channel=3 "platforms;android-37" || true
+          sdkmanager "platforms;android-34" "platforms;android-36" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
       - name: Enable KVM
         run: |
           sudo usermod -a -G kvm $USER
@@ -118,8 +117,7 @@ jobs:
       - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          sdkmanager --channel=3 "platforms;android-37" || true
+          sdkmanager "platforms;android-34" "platforms;android-36" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
       - name: Enable KVM
         run: |
           sudo usermod -a -G kvm $USER
@@ -182,8 +180,7 @@ jobs:
       - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-34" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
-          sdkmanager --channel=3 "platforms;android-37" || true
+          sdkmanager "platforms;android-34" "platforms;android-36" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
       - name: Enable KVM
         run: |
           sudo usermod -a -G kvm $USER
