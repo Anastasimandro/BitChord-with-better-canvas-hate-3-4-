@@ -722,15 +722,17 @@ tasks.register("localeCoverage") {
 // available in CI SDK channels. targetSdk stays 36 so runtime behaviour is
 // unaffected; the AAR metadata check is disabled because the dependency
 // works fine at API 36 runtime level.
-listOf(
-    "checkDevDebugAarMetadata",
-    "checkProdDebugAarMetadata",
-    "checkDevReleaseAarMetadata",
-    "checkProdReleaseAarMetadata",
-    "checkDevBenchmarkAarMetadata",
-    "checkProdBenchmarkAarMetadata",
-).forEach { taskName ->
-    project.tasks.findByName(taskName)?.setEnabled(false)
+afterEvaluate {
+    listOf(
+        "checkDevDebugAarMetadata",
+        "checkProdDebugAarMetadata",
+        "checkDevReleaseAarMetadata",
+        "checkProdReleaseAarMetadata",
+        "checkDevBenchmarkAarMetadata",
+        "checkProdBenchmarkAarMetadata",
+    ).forEach { taskName ->
+        project.tasks.findByName(taskName)?.setEnabled(false)
+    }
 }
 
 tasks.named("check") { dependsOn(i18nParityTest) }
