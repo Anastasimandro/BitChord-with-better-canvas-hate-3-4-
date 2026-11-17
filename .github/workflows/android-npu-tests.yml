@@ -57,11 +57,11 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-35" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
-      - name: Symlink android-37 -> android-37.0
+      - name: Copy android-37.0 to android-37
         run: |
-          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -e /opt/android-sdk/platforms/android-37 ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink: android-37 -> android-37.0"
+          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -d /opt/android-sdk/platforms/android-37 ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Copied android-37.0 to android-37"
           fi
       - name: Run Parity Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
@@ -102,11 +102,11 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-35" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
-      - name: Symlink android-37 -> android-37.0
+      - name: Copy android-37.0 to android-37
         run: |
-          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -e /opt/android-sdk/platforms/android-37 ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink: android-37 -> android-37.0"
+          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -d /opt/android-sdk/platforms/android-37 ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Copied android-37.0 to android-37"
           fi
       - name: Run Benchmark Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
@@ -147,11 +147,11 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-34" "platforms;android-35" "platforms;android-30" "system-images;android-30;default;x86_64" "emulator" "platform-tools" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           sdkmanager "platforms;android-37" || sdkmanager --channel=3 "platforms;android-37" || true
-      - name: Symlink android-37 -> android-37.0
+      - name: Copy android-37.0 to android-37
         run: |
-          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -e /opt/android-sdk/platforms/android-37 ]; then
-            ln -s android-37.0 /opt/android-sdk/platforms/android-37
-            echo "Created symlink: android-37 -> android-37.0"
+          if [ -d /opt/android-sdk/platforms/android-37.0 ] && [ ! -d /opt/android-sdk/platforms/android-37 ]; then
+            cp -r /opt/android-sdk/platforms/android-37.0 /opt/android-sdk/platforms/android-37
+            echo "Copied android-37.0 to android-37"
           fi
       - name: Check delegate availability
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
