@@ -38,7 +38,7 @@ android {
     // repo-wide (android.suppressUnsupportedCompileSdk in gradle.properties).
     // targetSdk stays 36: compileSdk widens the API surface, targetSdk is
     // what opts the app into new runtime behavior.
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.music.bitchord"
