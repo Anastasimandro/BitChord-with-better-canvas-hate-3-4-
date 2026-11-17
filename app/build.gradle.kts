@@ -87,7 +87,7 @@ android {
         "checkDevBenchmarkAarMetadata",
         "checkProdBenchmarkAarMetadata",
     ).forEach { taskName ->
-        tasks.findByName(taskName)?.isEnabled = false
+        tasks.findByName(taskName)?.let { it.isEnabled = false }
     }
 
     defaultConfig {
