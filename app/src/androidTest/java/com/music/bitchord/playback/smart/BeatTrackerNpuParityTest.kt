@@ -143,27 +143,40 @@ class BeatTrackerNpuParityTest {
     }
 
     /**
-     * Generates a synthetic click track for testing.
+     * Generates a synthetic drum loop (4/4: kick on every beat, accented kick on the downbeat,
+     * noise hi-hat on the off-beats). A bare sine click is not music-like enough for the Beat This
+     * model to emit confident peaks, which made track() return null (fewer than MIN_BEATS peaks).
      * Returns mono PCM at [sampleRate] Hz.
      */
     private fun generateClickTrack(sampleRate: Int, bpm: Double, durationSec: Double): FloatArray {
         val samples = FloatArray((sampleRate * durationSec).toInt())
-        val intervalSec = 60.0 / bpm
-        val intervalSamples = (intervalSec * sampleRate).toInt()
-        val clickDurationSamples = (0.01 * sampleRate).toInt() // 10 ms clicks
-
+        val beatSamples = (60.0 / bpm * sampleRate).toInt()
+        val rng = java.util.Random(42)
+        var beat = 0
         var pos = 0
         while (pos < samples.size) {
-            // Generate a short sine wave click
-            for (i in 0 until clickDurationSamples) {
+            val accent = if (beat % 4 == 0) 1.0 else 0.7
+            // Kick: decaying sine sweeping 120 -> 50 Hz over 150 ms.
+            val kickLen = (0.15 * sampleRate).toInt()
+            var phase = 0.0
+            for (i in 0 until kickLen) {
                 val idx = pos + i
                 if (idx >= samples.size) break
-                val t = i.toDouble() / sampleRate
-                // 1 kHz sine wave with Hann envelope
-                val envelope = 0.5 - 0.5 * Math.cos(2.0 * Math.PI * i / clickDurationSamples)
-                samples[idx] = (envelope * Math.sin(2.0 * Math.PI * 1000.0 * t) * 0.5).toFloat()
+                val t = i.toDouble() / kickLen
+                phase += 2.0 * Math.PI * (120.0 - 70.0 * t) / sampleRate
+                samples[idx] += (Math.sin(phase) * Math.exp(-5.0 * t) * 0.8 * accent).toFloat()
             }
-            pos += intervalSamples
+            // Hi-hat on the off-beat (half a beat later): short decaying noise burst.
+            val hatPos = pos + beatSamples / 2
+            val hatLen = (0.04 * sampleRate).toInt()
+            for (i in 0 until hatLen) {
+                val idx = hatPos + i
+                if (idx >= samples.size) break
+                val env = Math.exp(-6.0 * i / hatLen)
+                samples[idx] += ((rng.nextDouble() * 2 - 1) * env * 0.25).toFloat()
+            }
+            pos += beatSamples
+            beat++
         }
         return samples
     }

@@ -80,6 +80,16 @@ jobs:
           adb shell input keyevent 82
       - name: Run Parity Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest --no-daemon
+      - name: Dump logcat on failure
+        if: failure()
+        run: adb logcat -d -s AnalysisLog:* System.err:* AndroidRuntime:* TestRunner:* > logcat.txt || true
+      - name: Upload logcat
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logcat-${{ github.job }}
+          path: logcat.txt
+          if-no-files-found: ignore
 
   npu-benchmark-test:
     name: NPU Delegate Benchmark (Cold L0)
@@ -136,6 +146,16 @@ jobs:
           adb shell input keyevent 82
       - name: Run Benchmark Test
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerBenchmarkTest --no-daemon
+      - name: Dump logcat on failure
+        if: failure()
+        run: adb logcat -d -s AnalysisLog:* System.err:* AndroidRuntime:* TestRunner:* > logcat.txt || true
+      - name: Upload logcat
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logcat-${{ github.job }}
+          path: logcat.txt
+          if-no-files-found: ignore
 
   delegate-availability:
     name: NPU Delegate Availability Check
@@ -192,6 +212,16 @@ jobs:
           adb shell input keyevent 82
       - name: Check delegate availability
         run: ./gradlew :app:connectedDevDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.playback.smart.BeatTrackerNpuParityTest#npuDelegateParity --no-daemon
+      - name: Dump logcat on failure
+        if: failure()
+        run: adb logcat -d -s AnalysisLog:* System.err:* AndroidRuntime:* TestRunner:* > logcat.txt || true
+      - name: Upload logcat
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logcat-${{ github.job }}
+          path: logcat.txt
+          if-no-files-found: ignore
 
       - name: Print delegate availability
         run: find app/build/outputs/androidTest-results -name "*.xml" -exec grep -l "Delegate availability" {} \;
