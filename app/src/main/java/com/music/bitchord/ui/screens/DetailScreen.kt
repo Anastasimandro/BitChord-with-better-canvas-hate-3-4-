@@ -962,6 +962,10 @@ private fun ReleaseHeader(
                     }
                     .aspectRatio(1f),
             ) {
+                // Still cover: faded out via onCoverChanged once the animated canvas
+                // is fully opaque, so it never bleeds through the TextureView.
+                var stillCoverAlpha by remember(canvas) { mutableFloatStateOf(1f) }
+                LaunchedEffect(canvas) { stillCoverAlpha = 1f }
                 AsyncImage(
                     model = page.thumbnailUrl.artworkAt(HEADER_ART_PX),
                     contentDescription = null,
@@ -971,7 +975,10 @@ private fun ReleaseHeader(
                         .matchParentSize()
                         // The mask below erases part of what this layer drew,
                         // which it can only do in a buffer of its own.
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                            alpha = stillCoverAlpha
+                        }
                         .drawWithContent {
                             drawContent()
                             // The player banner's dissolve, along smootherstep so
@@ -998,6 +1005,11 @@ private fun ReleaseHeader(
                         isPlaying = true,
                         bottomFade = FULL_BLEED_FADE_FRACTION,
                         modifier = Modifier.matchParentSize(),
+                        onCoverChanged = { coverAlpha ->
+                            // When the animated canvas reaches full opacity, cross-fade
+                            // the still cover out so it can never bleed through.
+                            stillCoverAlpha = (1f - coverAlpha).coerceIn(0f, 1f)
+                        },
                     )
                 }
             }
@@ -1021,12 +1033,18 @@ private fun ReleaseHeader(
                     modifier = Modifier.matchParentSize(),
                 )
             }
+            // Still cover: faded out via onCoverChanged once the animated canvas
+            // is fully opaque, so it never bleeds through the TextureView.
+            var stillCoverAlpha by remember(canvas) { mutableFloatStateOf(1f) }
+            LaunchedEffect(canvas) { stillCoverAlpha = 1f }
             AsyncImage(
                 model = page.thumbnailUrl.artworkAt(HEADER_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { artFailed = it is AsyncImagePainter.State.Error },
-                modifier = Modifier.matchParentSize(),
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = stillCoverAlpha },
             )
             // Animated cover art, inside the same frame. Always running:
             // unlike the player's sleeve there is no transport here to follow,
@@ -1036,6 +1054,11 @@ private fun ReleaseHeader(
                     canvas = clip,
                     isPlaying = true,
                     modifier = Modifier.matchParentSize(),
+                    onCoverChanged = { coverAlpha ->
+                        // When the animated canvas reaches full opacity, cross-fade
+                        // the still cover out so it can never bleed through.
+                        stillCoverAlpha = (1f - coverAlpha).coerceIn(0f, 1f)
+                    },
                 )
             }
         }
