@@ -42,7 +42,7 @@ buildscript {
  * release tag's alone.
  */
 extra["bitchordVersionCode"] = 41
-extra["bitchordVersionName"] = "2.0.0"
+extra["bitchordVersionName"] = "2.1"
 
 /*
  * Bump this by hand before cutting each sideloaded test build ("beta2",
@@ -68,7 +68,7 @@ extra["bitchordVersionName"] = "2.0.0"
  * the build as a GitHub prerelease, which "releases/latest" ignores — testers
  * sideload it from the release page by hand.
  */
-extra["bitchordBetaSuffix"] = "beta1"
+extra["bitchordBetaSuffix"] = ""
 
 plugins {
     id("com.android.application") version "8.10.1" apply false
