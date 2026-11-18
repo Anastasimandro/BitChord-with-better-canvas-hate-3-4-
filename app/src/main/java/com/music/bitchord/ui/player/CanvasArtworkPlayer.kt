@@ -468,9 +468,9 @@ internal fun AndroidCanvasArtworkPlayer(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                // Blend rather than punch a hole: the still sleeve stays
-                // visible underneath for the length of the fade.
-                isOpaque = false
+                // Punch a hole rather than blend: once the clip is fully
+                // faded in the still sleeve underneath must not show through.
+                isOpaque = true
                 this.alpha = 0f
                 player.setVideoTextureView(this)
                 // setVideoTextureView installs ExoPlayer's own listener, and
