@@ -1189,17 +1189,18 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                 "lufs=${structural.lufs?.let { "%.1f".format(Locale.ROOT, it) }}",
         )
 
-        return WholeTrack(
+        val beatIntervalVal = leading?.beatInterval ?: features.beatInterval ?: 0.0
+                val bpmVal = (leading?.bpm ?: features.bpm)?.takeIf { it > 0.0 }
+                    ?: (beatIntervalVal.takeIf { it > 0.0 }?.let { 60.0 / it } ?: 0.0)
+
+                return WholeTrack(
                 TrackAnalysis(
                     status = TrackAnalysis.STATUS_READY,
                     trackId = trackId,
                     duration = effectiveDuration,
                     contentEndTime = features.contentEndTime.takeIf { it > 0 } ?: effectiveDuration,
-                    val beatIntervalVal = leading?.beatInterval ?: features.beatInterval ?: 0.0
-                val bpmVal = (leading?.bpm ?: features.bpm)?.takeIf { it > 0.0 }
-                    ?: (beatIntervalVal.takeIf { it > 0.0 }?.let { 60.0 / it } ?: 0.0)
-                bpm = bpmVal,
-                beatInterval = beatIntervalVal,
+                    bpm = bpmVal,
+                    beatInterval = beatIntervalVal,
                 beatConfidence = leading?.beatConfidence ?: features.beatConfidence,
                 downbeats = (headGrid?.downbeats.orEmpty() + tailGrid?.downbeats.orEmpty())
                     .ifEmpty { features.downbeats }
