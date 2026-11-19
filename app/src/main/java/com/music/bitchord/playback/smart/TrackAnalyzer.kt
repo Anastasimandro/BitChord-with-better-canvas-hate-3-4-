@@ -747,12 +747,17 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                 "over ${"%.1f".format(Locale.ROOT, head.seconds)}s",
         )
 
+        // Compute bpm from beatInterval if the beat tracker failed but we have a valid interval
+        val beatIntervalVal = grid?.beatInterval ?: entry?.beatInterval ?: 0.0
+        val bpmVal = (grid?.bpm ?: entry?.bpm ?: 0.0).takeIf { it > 0.0 }
+            ?: (beatIntervalVal.takeIf { it > 0.0 }?.let { 60.0 / it } ?: 0.0)
+
         return TrackAnalysis(
             status = TrackAnalysis.STATUS_READY,
             trackId = trackId,
             duration = durationSeconds,
-            bpm = grid?.bpm ?: entry?.bpm ?: 0.0,
-            beatInterval = grid?.beatInterval ?: entry?.beatInterval ?: 0.0,
+            bpm = bpmVal,
+            beatInterval = beatIntervalVal,
             beatConfidence = grid?.beatConfidence ?: entry?.beatConfidence ?: 0.0,
             downbeats = grid?.downbeats ?: entry?.downbeats.orEmpty(),
             firstBeat = grid?.firstBeat ?: entry?.firstBeat ?: 0.0,
@@ -1192,8 +1197,11 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                     trackId = trackId,
                     duration = effectiveDuration,
                     contentEndTime = features.contentEndTime.takeIf { it > 0 } ?: effectiveDuration,
-                    bpm = leading?.bpm ?: features.bpm,
-                beatInterval = leading?.beatInterval ?: features.beatInterval,
+                    val beatIntervalVal = leading?.beatInterval ?: features.beatInterval ?: 0.0
+                val bpmVal = (leading?.bpm ?: features.bpm)?.takeIf { it > 0.0 }
+                    ?: (beatIntervalVal.takeIf { it > 0.0 }?.let { 60.0 / it } ?: 0.0)
+                bpm = bpmVal,
+                beatInterval = beatIntervalVal,
                 beatConfidence = leading?.beatConfidence ?: features.beatConfidence,
                 downbeats = (headGrid?.downbeats.orEmpty() + tailGrid?.downbeats.orEmpty())
                     .ifEmpty { features.downbeats }
